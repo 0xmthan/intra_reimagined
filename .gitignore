@@ -1,7 +1,7 @@
 samples/
 node_modules/
 dist/
-.release/
 web-ext-artifacts/
 artifacts/
 .env.release
+release/
