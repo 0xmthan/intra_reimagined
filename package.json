@@ -1,0 +1,20 @@
+{
+  "name": "intra-reimagined",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "zip": "pnpm build && web-ext build -s dist -a artifacts --overwrite-dest",
+    "run:desktop": "web-ext run -s dist --firefox=/Applications/Zen.app/Contents/MacOS/zen",
+    "run:android": "web-ext run -s dist -t firefox-android --android-device=$ANDROID_DEVICE --firefox-apk=org.mozilla.firefox"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "web-ext": "^10.8.0"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Intra Reimagined",
+  "version": "0.1.0",
+  "description": "A modern, mobile-friendly redesign of the 42 intra profile page.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.intra.42.fr/*",
+    "https://pace-system.42.fr/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.intra.42.fr/*"
+      ],
+      "exclude_matches": [
+        "https://profile-v3.intra.42.fr/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://profile-v3.intra.42.fr/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "intra-reimagined@mthan",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "128.0"
+    }
+  }
+}

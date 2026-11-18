@@ -1,0 +1,298 @@
+/* Intra Reimagined: style tweaks layered on top of intra's own CSS. */
+
+/* ---------- 42 logo pinned to the top of the sidebar (see logo.ts) ---------- */
+#ir-logo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 300; /* above the sidebar (10) and navbar (200) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 60px;
+  background: rgb(41, 45, 57);
+}
+
+/* Same size intra gave it inside the navbar (`.main-navbar .main-navbar-logo img`). */
+#ir-logo img {
+  height: 30px;
+  width: auto;
+  margin: 0;
+}
+
+/* The logo's old slot is empty now; start the navbar after the sidebar column instead, so it
+   can't slide over the sidebar icons when the page trackpad-bounces. */
+html.ir-logo-pinned .main-navbar-logo {
+  display: none !important;
+}
+
+html.ir-logo-pinned .main-navbar {
+  margin-left: 80px;
+  width: auto !important;
+}
+
+/* ---------- v3-style tooltip (timeline segments) ---------- */
+.ir-v3-tooltip {
+  position: absolute;
+  z-index: 100003;
+  padding: 8px 16px;
+  border: 1px solid hsla(0, 0%, 100%, 0.25);
+  border-radius: 6px;
+  background: rgb(51, 51, 51);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* ---------- our settings section (on intra's edit page) ---------- */
+.ir-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 560px;
+  padding: 16px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.ir-setting-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ir-setting-desc {
+  color: #999;
+  font-size: 13px;
+}
+
+.ir-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ir-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ir-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #ccc;
+  transition: background 0.15s;
+}
+
+.ir-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+
+.ir-switch input:checked + .ir-switch-track {
+  background: #00babc;
+}
+
+.ir-switch input:checked + .ir-switch-track::after {
+  transform: translateX(20px);
+}
+
+.ir-switch input:focus-visible + .ir-switch-track {
+  outline: 2px solid #00babc;
+  outline-offset: 2px;
+}
+
+/* ---------- dark mode ---------- */
+/* Invert the whole page, then flip back things that are already dark or are pictures so they
+   keep their real colors: they get the root filter's inverse, so they render as normal. Filter on the root keeps position:fixed working. */
+html.ir-dark {
+  /* contrast(0.8) lifts black to ~#1a1a1a and dims white text to ~#e6e6e6: softer than pure black. */
+  filter: invert(1) hue-rotate(180deg) contrast(0.8);
+  /* The canvas (seen when trackpad-overscrolling past the top/bottom) isn't filtered, so paint it
+     the color the page background ends up as: #fafafa through the filter is ~#1e1e1e. */
+  background: #1e1e1e;
+}
+
+/* Make the (filtered) body cover the viewport so the raw canvas color never shows inside the page. */
+html.ir-dark body {
+  min-height: 100vh;
+}
+
+html.ir-dark :is(
+    img, video, picture, canvas, iframe, embed, object,
+    [style*='background-image'], .user-profile-picture,
+    .page-sidebar, #ir-logo, .main-navbar-logo, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
+  ) {
+  /* Exact inverse of the root filter (same functions reversed), so these show true colors. */
+  filter: contrast(1.25) hue-rotate(180deg) invert(1);
+}
+
+/* ...but not twice: things inside an already flipped-back area stay as they are. */
+html.ir-dark :is(
+    [style*='background-image'], .user-profile-picture,
+    .page-sidebar, #ir-logo, .main-navbar-logo, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
+  ) :is(img, video, picture, canvas, iframe, embed, object, [style*='background-image'], .user-profile-picture) {
+  filter: none;
+}
+
+/* ---------- pace milestone timeline (v3 style) ---------- */
+#ir-pace-timeline {
+  display: flex;
+  min-height: 144px;
+  background: rgb(23, 23, 23);
+  color: #fff;
+  font-size: 18px;
+}
+
+.ir-pace-eta {
+  flex: 0 0 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  border-right: 1px solid hsl(0, 0%, 20%);
+  white-space: nowrap;
+}
+
+.ir-pace-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ir-pace-track {
+  position: relative;
+  min-width: 720px;
+  height: 100%;
+  margin: 0 20px;
+}
+
+.ir-pace-months {
+  position: relative;
+  height: 58px;
+  border-bottom: 1px solid hsl(0, 0%, 20%);
+}
+
+.ir-pace-month {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+}
+
+.ir-pace-bars {
+  position: relative;
+  height: 40px;
+  margin: 22px 0;
+}
+
+.ir-pace-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-left: 4px solid rgb(23, 23, 23);
+  border-right: 4px solid rgb(23, 23, 23);
+  border-radius: 6px;
+  background: #234f55;
+  background-clip: padding-box;
+  overflow: hidden;
+  cursor: default;
+}
+
+.ir-pace-seg.done {
+  background-color: #4fb8bd;
+}
+
+.ir-pace-seg.done .ir-pace-label {
+  font-weight: 700;
+}
+
+.ir-pace-check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsla(0, 0%, 100%, 0.35);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ir-pace-label {
+  white-space: nowrap;
+}
+
+.ir-pace-today {
+  position: absolute;
+  top: 26px;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #ef4444;
+  pointer-events: none;
+}
+
+.ir-pace-today::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+@media (max-width: 1199px) {
+  #ir-pace-timeline {
+    flex-direction: column;
+  }
+  .ir-pace-eta {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid hsl(0, 0%, 20%);
+  }
+}
+
+/* "Pace 24 max deadline" row in v2's milestone box */
+.ir-max-deadline {
+  margin-top: 8px;
+}
+
+.ir-max-deadline .ir-end-goal {
+  color: #ef4444 !important;
+}
+
+/* ---------- hide the floating announcements (broadcasts) button ---------- */
+#sidebarCollapse {
+  display: none !important;
+}
