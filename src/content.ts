@@ -7,6 +7,8 @@ import { runPaceBridge } from './pace/bridge';
 import { V2_ORIGIN, V3_ORIGIN } from './pace/types';
 import { initTheme } from './theme';
 import { pinLogo } from './logo';
+import { mountHero, unmountHero } from './profile/hero';
+import { getSettings, onSettingsChange } from './store';
 
 const STYLE_ID = 'intra-reimagined-styles';
 
@@ -38,7 +40,26 @@ async function main() {
   await domReady();
   pinLogo();
   addSettingsButton();
-  if (location.origin === V2_ORIGIN && isProfilePage()) addPaceTimeline();
+  if (location.origin === V2_ORIGIN && isProfilePage()) initProfileHeader();
+}
+
+/** New header (default) or the classic banner + our timeline; switchable live from settings. */
+async function initProfileHeader() {
+  const apply = (useNew: boolean) => {
+    if (useNew) {
+      document.getElementById('ir-pace-timeline')?.remove();
+      document.getElementById('ir-max-deadline')?.remove();
+      mountHero();
+    } else {
+      unmountHero();
+      addPaceTimeline();
+    }
+  };
+  let current = (await getSettings()).newHeader;
+  apply(current);
+  onSettingsChange((s) => {
+    if (s.newHeader !== current) apply((current = s.newHeader));
+  });
 }
 
 main();

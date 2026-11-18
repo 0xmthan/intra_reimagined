@@ -1,6 +1,14 @@
 // Settings: a gear in intra's left icon sidebar that opens intra's own settings page
 // (/users/<login>/edit), where we add an "Intra Reimagined" entry to its side menu.
-import { getSettings, onSettingsChange, setSetting } from './store';
+import { getSettings, onSettingsChange, setSetting, type Settings } from './store';
+import { setHTML } from './html';
+
+type BoolSetting = keyof Settings;
+
+const TOGGLES: { key: BoolSetting; title: string; desc: string }[] = [
+  { key: 'darkMode', title: 'Dark mode', desc: 'Use a dark theme on every intra page.' },
+  { key: 'newHeader', title: 'New profile header', desc: "Redesigned header on profile pages. Turn off for intra's original banner." },
+];
 
 const BUTTON_ID = 'ir-settings-button';
 const PILL_ID = 'ir-settings-pill';
@@ -40,11 +48,11 @@ export function addSettingsButton() {
   // Mirror intra's own sidebar markup so it picks up the same styling and hover label.
   const li = document.createElement('li');
   li.id = BUTTON_ID;
-  li.innerHTML = `
+  setHTML(li, `
     <a class="${active ? 'active' : 'inactive'}" href="${settingsUrl()}" aria-label="Settings">
       <span class="icon-setting-gear"></span>
       <span class="visible-overlay"> Settings </span>
-    </a>`;
+    </a>`);
   list.appendChild(li);
 
   // On settings pages the gear is the current section, not Profile.
@@ -66,33 +74,39 @@ function addSettingsSection() {
   const pill = document.createElement('li');
   pill.id = PILL_ID;
   pill.setAttribute('role', 'presentation');
-  pill.innerHTML = `<a href="${HASH}"><span class="iconf-setting-gear"></span> Intra Reimagined </a>`;
+  setHTML(pill, `<a href="${HASH}"><span class="iconf-setting-gear"></span> Intra Reimagined </a>`);
   pills.appendChild(pill);
 
   const section = document.createElement('div');
   section.id = SECTION_ID;
   section.className = 'container-inner-item';
   section.hidden = true;
-  section.innerHTML = `
+  setHTML(section, `
     <div class="col-sm-12">
       <h4 class="font-weight-bold text-uppercase">Intra Reimagined</h4>
+      ${TOGGLES.map(
+        (t) => `
       <div class="ir-setting">
         <div class="ir-setting-text">
-          <label class="ir-setting-title" for="ir-dark-toggle">Dark mode</label>
-          <div class="ir-setting-desc">Use a dark theme on every intra page.</div>
+          <label class="ir-setting-title" for="ir-toggle-${t.key}">${t.title}</label>
+          <div class="ir-setting-desc">${t.desc}</div>
         </div>
         <label class="ir-switch">
-          <input type="checkbox" id="ir-dark-toggle" role="switch">
+          <input type="checkbox" id="ir-toggle-${t.key}" data-key="${t.key}" role="switch">
           <span class="ir-switch-track"></span>
         </label>
-      </div>
-    </div>`;
+      </div>`,
+      ).join('')}
+    </div>`);
   pane.appendChild(section);
 
-  const dark = section.querySelector<HTMLInputElement>('#ir-dark-toggle')!;
-  getSettings().then((s) => (dark.checked = s.darkMode));
-  onSettingsChange((s) => (dark.checked = s.darkMode));
-  dark.addEventListener('change', () => setSetting('darkMode', dark.checked));
+  const inputs = [...section.querySelectorAll<HTMLInputElement>('input[data-key]')];
+  const sync_ = (s: Settings) => inputs.forEach((i) => (i.checked = s[i.dataset.key as BoolSetting]));
+  getSettings().then(sync_);
+  onSettingsChange(sync_);
+  for (const input of inputs) {
+    input.addEventListener('change', () => setSetting(input.dataset.key as BoolSetting, input.checked));
+  }
 
   const show = (ours: boolean) => {
     for (const child of pane.children) {

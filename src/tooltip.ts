@@ -1,6 +1,7 @@
 // Hover tooltips for elements we add after intra has initialised its own tooltips.
 //  - 'intra': same Bootstrap 3 markup as intra, so intra's CSS styles it identically.
 //  - 'v3':    the boxed style profile-v3 uses (see .ir-v3-tooltip in styles.css).
+import { setHTML } from './html';
 
 type Style = 'intra' | 'v3';
 
@@ -24,7 +25,7 @@ export function addTooltip(
     if (style === 'intra') {
       tip.className = `tooltip fade ${placement} in`;
       tip.setAttribute('role', 'tooltip');
-      tip.innerHTML = '<div class="tooltip-arrow"></div><div class="tooltip-inner"></div>';
+      setHTML(tip, '<div class="tooltip-arrow"></div><div class="tooltip-inner"></div>');
       content = tip.querySelector('.tooltip-inner')!;
       tip.style.cssText = 'position:absolute;top:0;left:0;display:block;';
     } else {

@@ -1,7 +1,6 @@
 {
   "manifest_version": 3,
   "name": "Intra Reimagined",
-  "version": "0.1.0",
   "description": "A modern, mobile-friendly redesign of the 42 intra profile page.",
   "permissions": [
     "storage"
@@ -37,7 +36,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "intra-reimagined@mthan",
-      "strict_min_version": "128.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
           "none"
@@ -45,7 +44,7 @@
       }
     },
     "gecko_android": {
-      "strict_min_version": "128.0"
+      "strict_min_version": "142.0"
     }
   }
 }

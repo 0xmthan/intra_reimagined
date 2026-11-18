@@ -2,6 +2,7 @@
 // (your own home page and other users' /users/<login> pages).
 import { V3_ORIGIN, type PaceMessage, type PaceProfile } from './types';
 import { addTooltip } from '../tooltip';
+import { setHTML } from '../html';
 
 const ROOT_ID = 'ir-pace-timeline';
 const MAX_DEADLINE_ID = 'ir-max-deadline';
@@ -18,9 +19,13 @@ export async function addPaceTimeline() {
   const banner = document.querySelector('.profile-item .profile-banner');
   const login = document.querySelector<HTMLElement>('.profile-name .login[data-login]')?.dataset.login;
   if (!banner || !login || document.getElementById(ROOT_ID)) return;
+  await loadPace(login, (data) => render(banner, data));
+}
 
+/** Pace data for a login: the cached copy right away, then a fresh one (via profile-v3) when stale. */
+export async function loadPace(login: string, onData: (pace: PaceProfile) => void) {
   const cached = readCache(login);
-  if (cached) render(banner, cached.data);
+  if (cached) onData(cached.data);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return;
 
   try {
@@ -28,7 +33,7 @@ export async function addPaceTimeline() {
     if (!userId) return;
     const data = await loadViaV3(userId);
     writeCache(login, data);
-    render(banner, data);
+    onData(data);
   } catch (err) {
     console.warn('[intra-reimagined] pace timeline:', err);
   }
@@ -138,66 +143,87 @@ function label(level: number, widthPct: number) {
   return '';
 }
 
-function render(banner: Element, pace: PaceProfile) {
-  const start = day(pace.cursus_begin_date);
-  const milestones = [...pace.milestones].sort((a, b) => a.level - b.level);
+export interface PaceSegment {
+  level: number;
+  from: number;
+  to: number;
+  done: boolean;
+}
 
-  let prevEnd = start;
-  const segments = milestones.map((m) => {
-    const end = day(m.validated_at ?? m.deadline);
-    const seg = { m, from: prevEnd, to: Math.max(end, prevEnd + DAY_MS) };
-    prevEnd = seg.to;
-    return seg;
-  });
-  const end = Math.max(day(pace.eta_end_of_cursus), prevEnd);
-  const span = end - start;
-  const pct = (t: number) => Math.min(100, Math.max(0, ((t - start) / span) * 100));
+/** Each milestone runs from the previous one's end to its own validation date (or deadline). */
+export function paceSegments(pace: PaceProfile): PaceSegment[] {
+  let prevEnd = day(pace.cursus_begin_date);
+  return [...pace.milestones]
+    .sort((a, b) => a.level - b.level)
+    .map((m) => {
+      const seg = { level: m.level, from: prevEnd, to: Math.max(day(m.validated_at ?? m.deadline), prevEnd + DAY_MS), done: !!m.validated_at };
+      prevEnd = seg.to;
+      return seg;
+    });
+}
+
+/**
+ * Months row, milestone bars and today marker (classes `ir-pace-*`), shared by the classic
+ * timeline and the new profile header. `yearMarks` adds '26-style year labels on January.
+ */
+export function paceTrackHtml(pace: PaceProfile, { yearMarks = false } = {}) {
+  const start = day(pace.cursus_begin_date);
+  const segments = paceSegments(pace);
+  const end = Math.max(day(pace.eta_end_of_cursus), segments.at(-1)?.to ?? start);
+  const pct = (t: number) => Math.min(100, Math.max(0, ((t - start) / (end - start)) * 100));
+  const long = (end - start) / DAY_MS > 600;
 
   const months: string[] = [];
   const first = new Date(start);
   for (let d = new Date(first.getFullYear(), first.getMonth(), 1); d.getTime() <= end; d.setMonth(d.getMonth() + 1)) {
-    const left = pct(d.getTime());
-    months.push(`<span class="ir-pace-month" style="left:${left}%">${MONTHS[d.getMonth()]}</span>`);
+    if (yearMarks && long && d.getMonth() % 2) continue; // thin labels out on long cursus
+    const year = yearMarks && d.getMonth() === 0 ? ` <b class="ir-pace-year">'${String(d.getFullYear()).slice(2)}</b>` : '';
+    months.push(`<span class="ir-pace-month" style="left:${pct(d.getTime())}%">${MONTHS[d.getMonth()]}${year}</span>`);
   }
 
   const bars = segments
-    .map(({ m, from, to }) => {
+    .map(({ level, from, to, done }) => {
       const left = pct(from);
       const width = pct(to) - left;
-      const done = !!m.validated_at;
-      const text = label(m.level, width);
-      return `<div class="ir-pace-seg${done ? ' done' : ''}${m.level === pace.milestone ? ' current' : ''}" style="left:${left}%;width:${width}%" data-begin="${fmtTime(from)}" data-end="${fmtTime(to)}" data-took="${durationLine(from, to, done)}">
+      const text = label(level, width);
+      return `<div class="ir-pace-seg${done ? ' done' : ''}${level === pace.milestone ? ' current' : ''}" style="left:${left}%;width:${width}%" data-begin="${fmtTime(from)}" data-end="${fmtTime(to)}" data-took="${durationLine(from, to, done)}">
         <span class="ir-pace-check">${done ? '✓' : ''}</span>${text ? `<span class="ir-pace-label">${text}</span>` : ''}
       </div>`;
     })
     .join('');
 
   const now = Date.now();
-  const today = now >= start && now <= end ? `<div class="ir-pace-today" style="left:${pct(now)}%"></div>` : '';
+  const today = now >= start && now <= end ? `<div class="ir-pace-today" style="--at:${pct(now)}"></div>` : '';
+  return `<div class="ir-pace-months">${months.join('')}</div><div class="ir-pace-bars">${bars}</div>${today}`;
+}
 
-  const root = document.getElementById(ROOT_ID) ?? document.createElement('div');
-  root.id = ROOT_ID;
-  root.innerHTML = `
-    <div class="ir-pace-eta">
-      <div>Common Core ETA:</div>
-      <b>${fmt(pace.eta_end_of_cursus)}</b>
-    </div>
-    <div class="ir-pace-scroll">
-      <div class="ir-pace-track">
-        <div class="ir-pace-months">${months.join('')}</div>
-        <div class="ir-pace-bars">${bars}</div>
-        ${today}
-      </div>
-    </div>`;
-  if (!root.isConnected) banner.after(root);
-
-  // Same hover boxes as v3.
+/** v3-style hover boxes on the milestone bars. */
+export function bindPaceTooltips(root: ParentNode) {
   for (const seg of root.querySelectorAll<HTMLElement>('.ir-pace-seg')) {
     addTooltip(seg, [`Begin at: ${seg.dataset.begin}`, `End at: ${seg.dataset.end}`, seg.dataset.took!], {
       placement: 'bottom',
       style: 'v3',
     });
   }
+}
+
+export const fmtIsoDate = (iso: string) => fmt(iso);
+
+function render(banner: Element, pace: PaceProfile) {
+
+  const root = document.getElementById(ROOT_ID) ?? document.createElement('div');
+  root.id = ROOT_ID;
+  setHTML(root, `
+    <div class="ir-pace-eta">
+      <div>Common Core ETA:</div>
+      <b>${fmt(pace.eta_end_of_cursus)}</b>
+    </div>
+    <div class="ir-pace-scroll">
+      <div class="ir-pace-track">${paceTrackHtml(pace)}</div>
+    </div>`);
+  if (!root.isConnected) banner.after(root);
+
+  bindPaceTooltips(root);
   const etaValue = root.querySelector<HTMLElement>('.ir-pace-eta b');
   if (etaValue && pace.end_of_cursus_max_deadline) {
     addTooltip(etaValue, `Pace 24 max deadline: ${fmt(pace.end_of_cursus_max_deadline)}`, { placement: 'bottom', style: 'v3' });

@@ -143,7 +143,7 @@ html.ir-dark body {
 html.ir-dark :is(
     img, video, picture, canvas, iframe, embed, object,
     [style*='background-image'], .user-profile-picture,
-    .page-sidebar, #ir-logo, .main-navbar-logo, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
+    .page-sidebar, #ir-logo, .main-navbar-logo, #ir-hero, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
   ) {
   /* Exact inverse of the root filter (same functions reversed), so these show true colors. */
   filter: contrast(1.25) hue-rotate(180deg) invert(1);
@@ -152,7 +152,7 @@ html.ir-dark :is(
 /* ...but not twice: things inside an already flipped-back area stay as they are. */
 html.ir-dark :is(
     [style*='background-image'], .user-profile-picture,
-    .page-sidebar, #ir-logo, .main-navbar-logo, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
+    .page-sidebar, #ir-logo, .main-navbar-logo, #ir-hero, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
   ) :is(img, video, picture, canvas, iframe, embed, object, [style*='background-image'], .user-profile-picture) {
   filter: none;
 }
@@ -253,6 +253,7 @@ html.ir-dark :is(
 
 .ir-pace-today {
   position: absolute;
+  left: calc(var(--at) * 1%);
   top: 26px;
   bottom: 0;
   width: 2px;
@@ -294,5 +295,11 @@ html.ir-dark :is(
 
 /* ---------- hide the floating announcements (broadcasts) button ---------- */
 #sidebarCollapse {
+  display: none !important;
+}
+
+/* ---------- new profile header (profile/hero.ts) replaces intra's banner ---------- */
+html.ir-hero-on .profile-item .profile-banner,
+html.ir-hero-on #ir-pace-timeline {
   display: none !important;
 }

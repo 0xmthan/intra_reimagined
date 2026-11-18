@@ -1,0 +1,8 @@
+{
+  "summary": { "en-US": "A cleaner 42 intra: redesigned profile header, pace timeline, dark mode and more." },
+  "categories": ["other"],
+  "version": {
+    "license": "all-rights-reserved",
+    "compatibility": ["firefox", "android"]
+  }
+}

@@ -3,9 +3,10 @@
 
 export interface Settings {
   darkMode: boolean;
+  newHeader: boolean;
 }
 
-const DEFAULTS: Settings = { darkMode: false };
+const DEFAULTS: Settings = { darkMode: false, newHeader: true };
 const KEY = 'settings';
 
 interface StorageArea {
