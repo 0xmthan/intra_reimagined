@@ -1,0 +1,128 @@
+/* Dark mode: a real theme, not a filter. Pictures, emojis and colored elements keep their true
+   colors; only intra's light surfaces, dark text and light borders are recolored.
+   The rules below cover intra's common building blocks right away (no white flash). theme.ts
+   then tags any other light box / dark text it finds with .ir-dk-* classes, styled at the end. */
+
+html.ir-dark {
+  --ir-bg: #15161b;
+  --ir-surface: #1d1f26;
+  --ir-surface-2: #252832;
+  --ir-surface-3: #2e3240;
+  --ir-border: rgba(255, 255, 255, 0.09);
+  --ir-text: #e2e4ea;
+  --ir-muted: #a1a7b5;
+  --ir-faint: #737a8a;
+  color-scheme: dark;
+  background: var(--ir-bg); /* also the overscroll canvas */
+}
+
+html.ir-dark body {
+  background: var(--ir-bg) !important;
+  color: var(--ir-text);
+  min-height: 100vh;
+}
+
+/* ---------- surfaces ---------- */
+html.ir-dark :is(
+    .container-item, .container-inner-item, .profile-item, .page-content .panel, .well,
+    .modal-content, .notifications-container, .notification-list, .menu-drop-list,
+    .dropdown-menu, .popover, .chosen-drop, .chosen-container .chosen-results,
+    .broadcasts-filters-btn, .tt-menu, .list-group-item, .table, .card
+  ) {
+  background-color: var(--ir-surface) !important;
+  border-color: var(--ir-border) !important;
+}
+
+html.ir-dark :is(.container-inner-item.boxed, .achievement-item--image, .modal-header, .modal-footer, .panel-heading, .table-striped > tbody > tr:nth-of-type(odd), pre, code) {
+  background-color: var(--ir-surface-2) !important;
+  border-color: var(--ir-border) !important;
+}
+
+/* Hover/active states that are light on intra. */
+html.ir-dark :is(.dropdown-menu > li > a, .nav-pills > li > a, .list-group-item, .menu-drop-item a, .table-hover > tbody > tr):hover,
+html.ir-dark :is(.nav-pills > li.active > a:not([style*='background']), .dropdown-menu > .active > a) {
+  background-color: var(--ir-surface-3) !important;
+  color: var(--ir-text) !important;
+}
+html.ir-dark .menu-drop-item.unread {
+  background-color: var(--ir-surface-2) !important;
+}
+
+/* ---------- text ----------
+   Most text inherits the body color. Elements that set their own dark/grey color get tagged by
+   theme.ts instead of styled here: a selector here would also beat intra's colored text classes. */
+
+/* ---------- forms ---------- */
+html.ir-dark :is(input, select, textarea, option, .form-control, .chosen-container .chosen-choices, .chosen-single):not([type='checkbox'], [type='radio'], [type='range'], .btn) {
+  background-color: var(--ir-surface-2) !important;
+  color: var(--ir-text) !important;
+  border-color: var(--ir-border) !important;
+}
+html.ir-dark ::placeholder {
+  color: var(--ir-faint) !important;
+}
+
+/* ---------- lines ---------- */
+html.ir-dark :is(hr, .nav-separator, .nav-tabs, .table td, .table th) {
+  border-color: var(--ir-border) !important;
+}
+
+/* Logtime calendar (SVG): light day cells and grey day numbers; teal = days with logtime. */
+html.ir-dark .page-content svg rect[fill='#fafafa'] {
+  fill: var(--ir-surface-2);
+}
+html.ir-dark .page-content svg:has(rect[fill='#fafafa']) rect {
+  stroke: var(--ir-surface);
+}
+html.ir-dark .page-content svg text:is([fill='#ccc'], [fill='#999']) {
+  fill: var(--ir-faint);
+}
+html.ir-dark .page-content svg text[fill='#007B7C'] {
+  fill: #4fd1d3;
+}
+
+/* Highcharts (skills radar, project stats): white plot background, #333 labels set inline. */
+html.ir-dark .highcharts-background {
+  fill: transparent;
+}
+html.ir-dark :is(.highcharts-grid-line, .highcharts-axis-line, .highcharts-tick),
+html.ir-dark .highcharts-container path:is([stroke='#D8D8D8'], [stroke='#C0D0E0']) {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+/* White separators between bars/slices, and the tooltip box. */
+html.ir-dark .highcharts-container :is(rect, path)[stroke='#FFFFFF'] {
+  stroke: var(--ir-surface);
+}
+html.ir-dark .highcharts-container path[fill^='rgba(249'] {
+  fill: var(--ir-surface-3);
+}
+/* Labels get a white glow (text-shadow) meant for light backgrounds. */
+html.ir-dark .highcharts-container text {
+  text-shadow: none !important;
+}
+html.ir-dark .highcharts-container text:not([style*='fill:#fff']) {
+  fill: var(--ir-muted) !important;
+}
+
+/* ---------- tagged by theme.ts ---------- */
+html.ir-dk-reading *,
+html.ir-dk-reading *::before,
+html.ir-dk-reading *::after {
+  transition: none !important;
+}
+
+html.ir-dark .ir-dk-bg {
+  background-color: var(--ir-surface) !important;
+}
+html.ir-dark .ir-dk-bg2 {
+  background-color: var(--ir-surface-2) !important;
+}
+html.ir-dark .ir-dk-text {
+  color: var(--ir-text) !important;
+}
+html.ir-dark .ir-dk-muted {
+  color: var(--ir-muted) !important;
+}
+html.ir-dark .ir-dk-border {
+  border-color: var(--ir-border) !important;
+}

@@ -124,38 +124,7 @@ html.ir-logo-pinned .main-navbar {
   outline-offset: 2px;
 }
 
-/* ---------- dark mode ---------- */
-/* Invert the whole page, then flip back things that are already dark or are pictures so they
-   keep their real colors: they get the root filter's inverse, so they render as normal. Filter on the root keeps position:fixed working. */
-html.ir-dark {
-  /* contrast(0.8) lifts black to ~#1a1a1a and dims white text to ~#e6e6e6: softer than pure black. */
-  filter: invert(1) hue-rotate(180deg) contrast(0.8);
-  /* The canvas (seen when trackpad-overscrolling past the top/bottom) isn't filtered, so paint it
-     the color the page background ends up as: #fafafa through the filter is ~#1e1e1e. */
-  background: #1e1e1e;
-}
-
-/* Make the (filtered) body cover the viewport so the raw canvas color never shows inside the page. */
-html.ir-dark body {
-  min-height: 100vh;
-}
-
-html.ir-dark :is(
-    img, video, picture, canvas, iframe, embed, object,
-    [style*='background-image'], .user-profile-picture,
-    .page-sidebar, #ir-logo, .main-navbar-logo, #ir-hero, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
-  ) {
-  /* Exact inverse of the root filter (same functions reversed), so these show true colors. */
-  filter: contrast(1.25) hue-rotate(180deg) invert(1);
-}
-
-/* ...but not twice: things inside an already flipped-back area stay as they are. */
-html.ir-dark :is(
-    [style*='background-image'], .user-profile-picture,
-    .page-sidebar, #ir-logo, .main-navbar-logo, #ir-hero, .profile-banner, #ir-pace-timeline, .ir-v3-tooltip
-  ) :is(img, video, picture, canvas, iframe, embed, object, [style*='background-image'], .user-profile-picture) {
-  filter: none;
-}
+/* Dark mode lives in dark.css. */
 
 /* ---------- pace milestone timeline (v3 style) ---------- */
 #ir-pace-timeline {
@@ -301,5 +270,206 @@ html.ir-dark :is(
 /* ---------- new profile header (profile/hero.ts) replaces intra's banner ---------- */
 html.ir-hero-on .profile-item .profile-banner,
 html.ir-hero-on #ir-pace-timeline {
+  display: none !important;
+}
+
+/* ---------- no top bar: search, notifications, help and account live in the sidebar (topbar.ts) ---------- */
+html.ir-no-topbar .main-navbar {
+  display: none !important;
+}
+/* The sidebar sits under the page content (10 vs 20); lift it so its menus and labels can open
+   over the page. It never overlaps the content otherwise. */
+html.ir-no-topbar .page-sidebar {
+  z-index: 30;
+  /* Its box is wider than what it shows (it reserves room for a second menu, empty on most
+     pages), so let clicks through the empty part and keep its actual contents clickable. */
+  pointer-events: none;
+}
+html.ir-no-topbar .page-sidebar > * {
+  pointer-events: auto;
+}
+
+#ir-side-tools {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 0 14px;
+}
+#ir-side-tools::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.1);
+}
+#ir-side-tools .ir-tool {
+  position: relative;
+  padding: 0 !important; /* intra pads the sidebar's first <li> for the logo */
+}
+#ir-side-tools .ir-tool > a,
+#ir-side-tools .ir-account > .dropdown > a {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 48px;
+  padding: 0;
+  border-radius: 12px;
+  color: #8b93a7;
+  font-size: 0;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+#ir-side-tools .ir-tool > a:hover,
+#ir-side-tools .ir-tool > a:focus-visible,
+#ir-side-tools .ir-account > .dropdown.open > a,
+#ir-side-tools .ir-account > .dropdown > a:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  text-decoration: none;
+}
+#ir-side-tools svg {
+  width: 22px;
+  height: 22px;
+}
+#ir-side-tools .ir-help > a {
+  color: #e8818a;
+}
+#ir-side-tools .ir-help > a:hover {
+  color: #ff9aa2;
+}
+
+/* intra's bell: our icon instead of the icon font, count as a small badge. */
+#ir-side-tools .ir-bell a > .fal {
+  display: none;
+}
+#ir-side-tools .ir-bell-icon {
+  display: grid;
+}
+#ir-side-tools .ir-bell .user-action-count {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #d8636f;
+  color: #fff;
+  font: 700 10px/17px Helvetica, sans-serif;
+  text-align: center;
+}
+#ir-side-tools .ir-bell .user-action-count[data-counter-count='0'] {
+  display: none;
+}
+
+/* Account: just the avatar; the menu opens to the right, bottom-aligned. */
+#ir-side-tools .ir-account > .dropdown {
+  position: relative;
+  display: block;
+}
+#ir-side-tools .ir-account [data-login] {
+  display: none;
+}
+#ir-side-tools .ir-account .user-profile-picture {
+  display: block !important;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+#ir-side-tools .ir-account .dropdown-menu {
+  top: auto;
+  bottom: 0;
+  left: calc(100% + 20px); /* clear of the sidebar's edge */
+  min-width: 200px;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  font-size: 14px;
+  text-align: left;
+}
+/* Undo intra's tall, centered sidebar-link styles (`.main-left-navbar li a`) inside the menu. */
+#ir-side-tools .ir-account .dropdown-menu > li {
+  padding: 0 !important;
+  text-align: left;
+}
+#ir-side-tools .ir-account .dropdown-menu > li > a {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  height: auto;
+  padding: 9px 16px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: #2c2c34;
+}
+/* intra's menu icons are empty (no glyphs on these pages); drop them so the items line up. */
+#ir-side-tools .ir-account .dropdown-menu > li > a > span[class^='iconf-'] {
+  display: none;
+}
+#ir-side-tools .ir-account .dropdown-menu > li > a:hover {
+  background: #f2f3f5;
+}
+
+/* Hover labels to the right of each tool. */
+#ir-side-tools .ir-tool-label {
+  position: absolute;
+  top: 50%;
+  left: 70px;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #1c1f27;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 50;
+}
+#ir-side-tools .ir-tool:hover .ir-tool-label {
+  display: flex;
+}
+#ir-side-tools .ir-tool-label kbd {
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: #aab;
+  font-size: 11px;
+}
+
+/* intra places the notifications panel under the old top-bar bell; open it beside the sidebar. */
+html.ir-no-topbar .notifications-container {
+  position: fixed !important;
+  top: auto !important;
+  bottom: 12px !important;
+  left: 92px !important;
+  right: auto !important;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* Search palette host (search.ts): covers the viewport so the backdrop inside it does too. */
+#ir-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+#ir-palette[hidden] {
   display: none !important;
 }

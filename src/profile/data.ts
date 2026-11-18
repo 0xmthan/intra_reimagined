@@ -2,6 +2,7 @@
 // JSON endpoints intra's page calls. Works on your own home page and on other users' profiles.
 // Interactive bits (title picker, cursus select, "give points") keep a handle on intra's original
 // element so we can trigger intra's own behaviour instead of re-implementing it.
+import { myLogin } from '../me';
 
 export interface TitleOption {
   label: string;
@@ -28,16 +29,27 @@ export interface HeroData {
   location: { available: boolean; text: string };
   campus?: string;
   email?: string;
+  /** When the user did the C Piscine, from their earliest piscine project (e.g. "Sep 2025"). */
+  piscine?: { label: string; date: Date };
   links: { graph?: string; resume?: string; edit?: string };
 }
 
 export interface Goals {
-  edtrax_weeks?: { name: string; hours: number; text: string }[];
+  edtrax_weeks?: Week[];
   probationary_period?: boolean;
   next_milestone?: string; // dd.mm.yyyy
   next_milestone_days?: number;
   cc_eta?: string; // dd.mm.yyyy
   cc_eta_days?: string;
+  // Old blackhole system (e.g. accounts blackholed before pace): days left, negative once absorbed.
+  singularity?: number;
+  bh_date?: string; // dd.mm.yyyy
+}
+
+export interface Week {
+  name: string;
+  hours: number;
+  text: string;
 }
 
 export interface CoalitionInfo {
@@ -61,7 +73,7 @@ export function readHero(): HeroData | undefined {
   const login = loginEl?.dataset.login;
   if (!nameBox || !login) return undefined;
 
-  const me = q<HTMLAnchorElement>('.main-navbar a[href^="https://profile.intra.42.fr/users/"]')?.href.split('/users/')[1];
+  const me = myLogin();
   const own = location.pathname === '/' || me === login;
 
   const nameEl = q('.name', nameBox)?.cloneNode(true) as Element | undefined;
@@ -125,6 +137,7 @@ export function readHero(): HeroData | undefined {
     level: lm ? { level: Number(lm[1]), pct: Number(lm[2]), href: levelEl?.href } : undefined,
     location: { available, text: available ? seat : 'Unavailable' },
     campus: txt(q('.profile-item .icon-location')?.parentElement) || undefined,
+    piscine: readPiscine(),
     email: q<HTMLAnchorElement>('.profile-item a[href^="mailto:"]')?.href.replace(/^mailto:/, '') || undefined,
     links: {
       graph: actions.find((a) => a.href.includes('graph'))?.href,
@@ -134,9 +147,30 @@ export function readHero(): HeroData | undefined {
   };
 }
 
-async function getJSON<T>(url: string): Promise<T | undefined> {
+/**
+ * The profile's project list tags each project with its cursus and a date (`data-long-date`,
+ * e.g. "2023-01-16 05:14:04 +0300"). The earliest C Piscine project falls in the piscine's
+ * first week, which gives its month. Falls back to any piscine-like cursus.
+ */
+function readPiscine(): HeroData['piscine'] {
+  const items = [...document.querySelectorAll<HTMLElement>('.project-item[data-cursus]')];
+  for (const re of [/(^|\s)c-piscine/, /piscine/]) {
+    const dates = items
+      .filter((el) => re.test(el.dataset.cursus ?? ''))
+      .map((el) => el.querySelector<HTMLElement>('[data-long-date]')?.dataset.longDate)
+      .map((s) => (s ? new Date(s.replace(' ', 'T').replace(/ ([+-]\d{2})(\d{2})$/, '$1:$2')) : undefined))
+      .filter((d): d is Date => !!d && !isNaN(d.getTime()));
+    if (dates.length) {
+      const date = new Date(Math.min(...dates.map((d) => d.getTime())));
+      return { date, label: date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) };
+    }
+  }
+  return undefined;
+}
+
+async function getJSON<T>(url: string, withCookies = true): Promise<T | undefined> {
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+    const res = await fetch(url, { credentials: withCookies ? 'include' : 'omit', headers: { Accept: 'application/json' } });
     return res.ok ? ((await res.json()) as T) : undefined;
   } catch {
     return undefined;
@@ -154,4 +188,43 @@ export async function fetchCoalition(login: string, cursus: string): Promise<Coa
   return c
     ? { score: c.score, rank: c.rank, color: c.coalition.color, icon: c.coalition.image_url, cover: c.coalition.cover_url }
     : undefined;
+}
+
+/**
+ * Hours on campus for the last 4 full weeks (Mon–Sun), newest first like `edtrax_weeks`.
+ * Fallback for profiles whose goals have no attendance (pisciners, blackholed accounts).
+ */
+export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefined> {
+  const stats = await getJSON<Record<string, string>>(
+    `https://translate.intra.42.fr/users/${encodeURIComponent(login)}/locations_stats.json`,
+  );
+  if (!stats) return undefined;
+  const secs = (t: string) => t.split(':').reduce((acc, n) => acc * 60 + Number(n), 0);
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // this week's Monday
+  return [1, 2, 3, 4].map((ago) => {
+    let total = 0;
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() - ago * 7 + i);
+      total += secs(stats[iso(day)] ?? '0:0:0');
+    }
+    const h = Math.floor(total / 3600);
+    return { name: ago === 1 ? 'Last week' : `W-${ago}`, hours: h, text: `${h}h ${Math.floor((total % 3600) / 60)}m` };
+  });
+}
+
+/** Our API server (see server/), set at build time with VITE_IR_API; unset = not used. */
+const IR_API = (import.meta.env.VITE_IR_API as string | undefined)?.replace(/\/+$/, '');
+
+/** Official piscine month from 42's API via our server, e.g. "Nov 2025". */
+export async function fetchPiscine(login: string): Promise<string | undefined> {
+  if (!IR_API) return undefined;
+  const j = await getJSON<{ month: string | null; year: string | null }>(`${IR_API}/v1/users/${encodeURIComponent(login)}/piscine`, false);
+  if (!j?.month || !j.year) return undefined;
+  const date = new Date(`${j.month} 1, ${j.year}`);
+  return isNaN(date.getTime()) ? undefined : date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }

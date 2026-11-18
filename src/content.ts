@@ -1,6 +1,9 @@
 // Intra Reimagined: small, incremental tweaks on top of the original intra UI.
 // Each tweak gets its own function so it can be reviewed and toggled on its own.
-import css from './styles.css?inline';
+import baseCss from './styles.css?inline';
+import darkCss from './dark.css?inline';
+
+const css = baseCss + darkCss;
 import { addSettingsButton } from './settings';
 import { addPaceTimeline, isProfilePage } from './pace/timeline';
 import { runPaceBridge } from './pace/bridge';
@@ -9,6 +12,7 @@ import { initTheme } from './theme';
 import { pinLogo } from './logo';
 import { mountHero, unmountHero } from './profile/hero';
 import { getSettings, onSettingsChange } from './store';
+import { setSidebarTools } from './topbar';
 
 const STYLE_ID = 'intra-reimagined-styles';
 
@@ -40,7 +44,13 @@ async function main() {
   await domReady();
   pinLogo();
   addSettingsButton();
+  initSidebarTools();
   if (location.origin === V2_ORIGIN && isProfilePage()) initProfileHeader();
+}
+
+async function initSidebarTools() {
+  setSidebarTools((await getSettings()).sidebarTools);
+  onSettingsChange((s) => setSidebarTools(s.sidebarTools));
 }
 
 /** New header (default) or the classic banner + our timeline; switchable live from settings. */

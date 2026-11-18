@@ -442,6 +442,10 @@ select {
   white-space: nowrap;
 }
 
+.big.muted {
+  color: var(--muted);
+}
+
 .big small {
   font-size: 18px;
   font-weight: 500;

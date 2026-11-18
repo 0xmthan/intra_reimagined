@@ -2,11 +2,13 @@
 // (/users/<login>/edit), where we add an "Intra Reimagined" entry to its side menu.
 import { getSettings, onSettingsChange, setSetting, type Settings } from './store';
 import { setHTML } from './html';
+import { myLogin } from './me';
 
 type BoolSetting = keyof Settings;
 
 const TOGGLES: { key: BoolSetting; title: string; desc: string }[] = [
   { key: 'darkMode', title: 'Dark mode', desc: 'Use a dark theme on every intra page.' },
+  { key: 'sidebarTools', title: 'No top bar', desc: "Move search (⌘K), notifications and your account menu into the sidebar and remove intra's top bar." },
   { key: 'newHeader', title: 'New profile header', desc: "Redesigned header on profile pages. Turn off for intra's original banner." },
 ];
 
@@ -32,12 +34,7 @@ const onSettingsPage = () => onProfileSite() && SETTINGS_PATHS.some((re) => re.t
 const onEditPage = () => onProfileSite() && /^\/users\/[^/]+\/edit\/?$/.test(location.pathname);
 
 function settingsUrl() {
-  // The navbar's "View my profile" link carries the logged-in user's login.
-  for (const a of document.querySelectorAll<HTMLAnchorElement>('.main-navbar a[href*="/users/"]')) {
-    const m = a.href.match(/^https:\/\/profile\.intra\.42\.fr\/users\/([^/?#]+)$/);
-    if (m) return `https://profile.intra.42.fr/users/${m[1]}/edit${HASH}`;
-  }
-  return `https://profile.intra.42.fr/users/me/edit${HASH}`;
+  return `https://profile.intra.42.fr/users/${myLogin() ?? 'me'}/edit${HASH}`;
 }
 
 export function addSettingsButton() {

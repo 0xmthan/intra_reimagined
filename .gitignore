@@ -5,3 +5,4 @@ web-ext-artifacts/
 artifacts/
 .env.release
 release/
+server/.env

@@ -5,7 +5,7 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { fetchCoalition, fetchGoals, readHero, type Goals, type HeroData } from './data';
+import { fetchCoalition, fetchGoals, fetchLogtimeWeeks, fetchPiscine, readHero, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
@@ -15,9 +15,8 @@ export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
 const DAY_MS = 86_400_000;
 
-// Placeholders until we wire real sources (shown with a "sample data" tag).
+// Placeholder until we wire a real source (shown with a "sample data" tag).
 const SAMPLE_EVALS = { total: 142, failed: 31, outstanding: 18 };
-const SAMPLE_POOL = 'Sep 2025';
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -25,6 +24,12 @@ const esc = (s: string) =>
 interface State {
   data: HeroData;
   goals?: Goals;
+  /** Set once the goals request finished, so cards can tell "loading" from "nothing to show". */
+  goalsLoaded?: boolean;
+  /** Official piscine month from our API server, preferred over the one guessed from projects. */
+  piscine?: string;
+  /** Attendance from raw logtime, when goals have none. */
+  logWeeks?: Week[];
   pace?: PaceProfile;
   coal?: Awaited<ReturnType<typeof fetchCoalition>>;
 }
@@ -49,19 +54,44 @@ export function mountHero() {
   const paint = () => render(hero, state);
   paint();
 
+  let req = 0;
   const refresh = async () => {
+    const mine = ++req;
+    state.goalsLoaded = false;
     const [goals, coal] = await Promise.all([
       fetchGoals(state.data.login, state.data.cursus.value),
       fetchCoalition(state.data.login, state.data.cursus.value),
     ]);
-    Object.assign(state, { goals, coal });
+    if (mine !== req) return; // a newer cursus was picked meanwhile
+    Object.assign(state, { goals, coal, goalsLoaded: true });
     paint();
+    if (!goals?.edtrax_weeks?.length && !state.logWeeks) {
+      state.logWeeks = (await fetchLogtimeWeeks(state.data.login)) ?? [];
+      paint();
+    }
   };
   refresh();
+  fetchPiscine(data.login).then((piscine) => {
+    if (!piscine) return;
+    state.piscine = piscine;
+    paint();
+  });
   loadPace(data.login, (pace) => {
     state.pace = pace;
     paint();
   });
+
+  // Firefox restores intra's cursus select to the last choice only after we have read it (and intra
+  // may switch it itself), so follow the select whenever it no longer matches what we show.
+  const followSelect = () => {
+    if (!state.data.cursus.el || state.data.cursus.el.value === state.data.cursus.value) return;
+    state.data = readHero() ?? state.data;
+    paint();
+    refresh();
+  };
+  if (document.readyState === 'complete') followSelect();
+  else window.addEventListener('load', followSelect, { once: true });
+  state.data.cursus.el?.addEventListener('change', () => setTimeout(followSelect, 50));
 
   // Clicking anywhere else closes the title menu.
   document.addEventListener('click', () => hero.querySelector('.menu')?.classList.remove('open'));
@@ -71,12 +101,7 @@ export function mountHero() {
     const sel = e.target as HTMLSelectElement;
     if (!sel.matches('[data-cursus]') || !state.data.cursus.el) return;
     state.data.cursus.el.value = sel.value;
-    state.data.cursus.el.dispatchEvent(new Event('change', { bubbles: true }));
-    setTimeout(() => {
-      state.data = readHero() ?? state.data;
-      paint();
-      refresh();
-    }, 50);
+    state.data.cursus.el.dispatchEvent(new Event('change', { bubbles: true })); // followSelect picks it up
   });
 }
 
@@ -113,7 +138,22 @@ const parseDmy = (s?: string) => {
   return m ? new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00`).getTime() : undefined;
 };
 
-function render(hero: HTMLElement, { data: d, goals, pace, coal }: State) {
+/** Calendar distance between two dates as big-number HTML: "3y 10m", "5m 12d", or "9 days". */
+function spanHtml(fromMs: number, toMs: number) {
+  const [a, b] = fromMs <= toMs ? [new Date(fromMs), new Date(toMs)] : [new Date(toMs), new Date(fromMs)];
+  let months = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+  if (b.getDate() < a.getDate()) months--;
+  const anchor = new Date(a);
+  anchor.setMonth(a.getMonth() + months);
+  const days = Math.floor((b.getTime() - anchor.getTime()) / DAY_MS);
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y) return `${y}<small>y</small> ${m}<small>m</small>`;
+  if (m) return `${m}<small>m</small> ${days}<small>d</small>`;
+  return `${days}<small> days</small>`;
+}
+
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine }: State) {
   const color = coal?.color ?? d.coalition?.color ?? '#00babc';
   hero.style.setProperty('--coal', color);
   hero.style.setProperty('--cover', d.cover ? `url("${d.cover}")` : 'none');
@@ -121,14 +161,18 @@ function render(hero: HTMLElement, { data: d, goals, pace, coal }: State) {
   // ── deadline: next milestone (or blackhole while on probation) ──
   const deadlineAt = parseDmy(goals?.next_milestone);
   const daysLeft = goals?.next_milestone_days ?? (deadlineAt ? Math.ceil((deadlineAt - Date.now()) / DAY_MS) : undefined);
-  const blackhole = !!goals?.probationary_period;
+  // Old blackhole system: days left until the blackhole, negative once the student was absorbed.
+  const bhDays = goals?.singularity;
+  const absorbed = bhDays !== undefined && bhDays < 0;
+  const blackhole = !!goals?.probationary_period || bhDays !== undefined;
   const danger = blackhole || (daysLeft !== undefined && daysLeft <= 14);
   const current = pace ? paceSegments(pace).find((s) => s.level === pace.milestone) : undefined;
   const used = current ? Math.min(1, Math.max(0, (Date.now() - current.from) / (current.to - current.from))) : undefined;
   const C = 2 * Math.PI * 18;
 
   // ── attendance: W-4 … last week ──
-  const weeks = [...(goals?.edtrax_weeks ?? [])].reverse();
+  const weeks = [...(goals?.edtrax_weeks?.length ? goals.edtrax_weeks : (logWeeks ?? []))].reverse();
+  const weeksPending = !weeks.length && !(goalsLoaded && logWeeks);
   const maxW = Math.max(40, ...weeks.map((w) => w.hours));
   const wkLabel = (n: string) => (/last/i.test(n) ? 'Last' : n);
 
@@ -168,7 +212,7 @@ function render(hero: HTMLElement, { data: d, goals, pace, coal }: State) {
           <div class="chips">
             <button class="chip btn" data-act="copy" data-tip="Copy login">${icon('copy')} ${esc(d.login)}</button>
             ${d.grade ? `<span class="chip">${esc(d.grade)}</span>` : ''}
-            <span class="chip" data-tip="Piscine · sample data">${icon('wave')} Piscine · ${SAMPLE_POOL}</span>
+            ${piscine || d.piscine ? `<span class="chip" data-tip="${piscine ? 'Piscine' : 'C Piscine, from their first piscine project'}">${icon('wave')} Piscine · ${esc(piscine ?? d.piscine!.label)}</span>` : ''}
             ${d.cursus.options.length > 1
               ? `<label class="chip btn"><select data-cursus>${d.cursus.options.map((o) => `<option value="${esc(o.value)}" ${o.value === d.cursus.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select> ▾</label>`
               : `<span class="chip">${esc(d.cursus.value)}</span>`}
@@ -203,7 +247,7 @@ function render(hero: HTMLElement, { data: d, goals, pace, coal }: State) {
               <div class="bars">${weeks.map((w) => `<div data-tip="${esc(wkLabel(w.name))}: ${w.hours}h · ${esc(w.text)}"><span style="height:${(w.hours / maxW) * 100}%"></span></div>`).join('')}</div>
               <div class="bars-x">${weeks.map((w) => `<span>${esc(wkLabel(w.name))}</span>`).join('')}</div>
             </div>
-          </div>` : '<div class="skeleton"></div>'}
+          </div>` : weeksPending ? '<div class="skeleton"></div>' : '<div class="big muted">—</div><div class="sub">No logtime available</div>'}
         </div>
         <div class="card">
           <h3>${icon('eval')} As evaluator <span class="sample">sample data</span></h3>
@@ -222,11 +266,17 @@ function render(hero: HTMLElement, { data: d, goals, pace, coal }: State) {
           </div>
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}">
-          <h3>${icon(blackhole ? 'hole' : 'flag')} ${blackhole ? 'Blackhole' : 'Next deadline'}</h3>
-          ${daysLeft !== undefined ? `
+          <h3>${icon(blackhole ? 'hole' : 'flag')} ${absorbed ? 'Blackholed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>
+          ${bhDays !== undefined && daysLeft === undefined ? `
+            <div class="big" data-tip="${Math.abs(bhDays)} days">${spanHtml(Date.now(), Date.now() + bhDays * DAY_MS)}${absorbed ? '<small> ago</small>' : ''}</div>
+            <div class="sub">${absorbed ? 'Absorbed on' : 'Blackhole on'} ${esc(goals?.bh_date ?? '')}</div>
+          ` : daysLeft !== undefined ? `
             <div class="big">${daysLeft}<small> days</small></div>
             <div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>
             ${used !== undefined ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
+          ` : goalsLoaded ? `
+            <div class="big muted">—</div>
+            <div class="sub">No deadline in ${esc(d.cursus.options.find((o) => o.value === d.cursus.value)?.label ?? d.cursus.value)}</div>
           ` : '<div class="skeleton"></div>'}
         </div>
       </section>
