@@ -536,3 +536,251 @@ html.ir-embed .page-content .container-item {
   cursor: pointer;
 }
 .ir-rec-more:hover { text-decoration: underline; }
+
+/* ---------- home Evaluations card: patronage reviews folded away (profile/evaluations.ts) ---------- */
+.ir-eval-empty { padding: 6px 10px; color: var(--ir-muted, #a1a7b5); font-size: 14px; }
+#ir-patronage-reviews { margin-top: 6px; }
+#ir-patronage-reviews > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+#ir-patronage-reviews > summary::-webkit-details-marker { display: none; }
+#ir-patronage-reviews > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+}
+#ir-patronage-reviews[open] > summary::before { transform: rotate(45deg); }
+#ir-patronage-reviews > summary:hover { color: var(--ir-text, #e2e4ea); }
+
+/* ---------- home page layout (profile/home-grid.ts): cards sized to what they hold, header look ---------- */
+.row.ir-home-grid {
+  --g-line: rgba(255, 255, 255, 0.09);
+  --g-muted: rgba(242, 244, 247, 0.66);
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 320px 430px 430px 430px;
+  grid-auto-rows: 430px;
+  grid-template-areas:
+    'projects logtime logtime'
+    'projects evals agenda'
+    'skills achievements agenda'
+    'patronages patronages patronages';
+  gap: 20px;
+  margin: 0 0 24px !important;
+  padding: 0 15px;
+}
+.row.ir-home-grid::before, .row.ir-home-grid::after { display: none !important; }
+.ir-home-grid > [data-ir-card] {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0;
+  min-height: 0;
+  float: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.ir-home-grid > [data-ir-card='hidden'] { display: none !important; }
+.ir-home-grid > [data-ir-card='agenda'] { grid-area: agenda; }
+.ir-home-grid > [data-ir-card='logtime'] { grid-area: logtime; }
+.ir-home-grid > [data-ir-card='projects'] { grid-area: projects; }
+.ir-home-grid > [data-ir-card='evals'] { grid-area: evals; }
+.ir-home-grid > [data-ir-card='skills'] { grid-area: skills; }
+.ir-home-grid > [data-ir-card='patronages'] { grid-area: patronages; }
+.ir-home-grid > [data-ir-card='achievements'] { grid-area: achievements; }
+
+/* The card: the header's glass look. */
+.ir-home-grid > [data-ir-card] > .container-inner-item {
+  display: flex !important;
+  flex-direction: column;
+  height: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 18px 20px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--g-line) !important;
+  border-radius: 18px !important;
+  background: rgba(20, 23, 29, 0.85) !important;
+  box-shadow: none !important;
+}
+.ir-home-grid > [data-ir-card] > .container-inner-item > :not(h4) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.ir-home-grid > [data-ir-card] > .container-inner-item > .overflowable-item { height: auto !important; max-height: none !important; }
+
+/* Titles like the header's: small, spaced capitals with a teal icon. */
+.ir-home-grid h4.profile-title {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+  margin: 0 0 12px !important;
+  text-align: left !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 28px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--g-muted) !important;
+}
+.ir-home-grid h4.profile-title::before {
+  content: '';
+  flex: none;
+  width: 15px;
+  height: 15px;
+  background: #00babc;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+.ir-home-grid h4.profile-title > .pull-right,
+.ir-home-grid h4.profile-title > .title-container,
+.ir-home-grid h4.profile-title > .ir-sort {
+  float: none !important;
+  margin-left: auto !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+/* Header buttons: soft pills like "Give", not intra's outlined boxes. */
+.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, .school-record-button) {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  margin: 0 !important;
+  padding: 4px 9px !important;
+  border: 1px solid var(--g-line) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--g-muted) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 18px !important;
+  letter-spacing: 0;
+  text-transform: none !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+}
+.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, .school-record-button):hover {
+  color: var(--ir-text, #e2e4ea) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+.ir-home-grid h4.profile-title > .pull-right > .pull-right { display: contents; }
+/* A bare header link (Last achievements) also goes to the right. */
+.ir-home-grid h4.profile-title > a:is(.btn, .simple-link) { margin-left: auto !important; }
+.ir-home-grid h4.profile-title > a:is(.btn, .simple-link) ~ a { margin-left: 0 !important; }
+.ir-home-grid > [data-ir-card='agenda'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 10h18'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 10h18'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 11 3 3 8-8'/%3E%3Cpath d='M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 11 3 3 8-8'/%3E%3Cpath d='M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='logtime'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='projects'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='skills'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l8 4.5v9L12 21l-8-4.5v-9z'/%3E%3Cpath d='M12 8l4 2.3v4.4L12 17l-4-2.3v-4.4z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l8 4.5v9L12 21l-8-4.5v-9z'/%3E%3Cpath d='M12 8l4 2.3v4.4L12 17l-4-2.3v-4.4z'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='achievements'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z'/%3E%3Cpath d='M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z'/%3E%3Cpath d='M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3'/%3E%3C/svg%3E"); }
+.ir-home-grid > [data-ir-card='patronages'] h4.profile-title::before { -webkit-mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20a6.5 6.5 0 0 1 13 0'/%3E%3Cpath d='M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20a6.5 6.5 0 0 1 13 0'/%3E%3Cpath d='M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6'/%3E%3C/svg%3E"); }
+
+@media (max-width: 1199px) {
+  .row.ir-home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 300px 400px 400px 400px 400px;
+    grid-auto-rows: 400px;
+    grid-template-areas:
+      'logtime logtime'
+      'projects evals'
+      'projects agenda'
+      'skills agenda'
+      'achievements patronages';
+  }
+}
+@media (max-width: 767px) {
+  .row.ir-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    grid-template-areas: none;
+    gap: 14px;
+    padding: 0 8px;
+  }
+  .ir-home-grid > [data-ir-card] { grid-area: auto !important; height: 420px !important; }
+  .ir-home-grid > [data-ir-card='projects'] { height: 560px !important; }
+  .ir-home-grid > [data-ir-card='logtime'] { height: auto !important; }
+}
+
+/* Evaluations with nothing real coming up: a slim full-width strip, and Patronages gets wide. */
+.row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
+  grid-template-rows: 320px auto 430px 430px;
+  grid-template-areas:
+    'projects logtime logtime'
+    'projects evals evals'
+    'projects patronages agenda'
+    'achievements skills agenda';
+}
+.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item {
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 4px;
+  padding: 10px 20px !important;
+}
+.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title { display: contents !important; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { order: 3; margin-left: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item {
+  order: 2;
+  flex: 1 1 auto;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 18px;
+  overflow: visible !important;
+}
+.ir-home-grid > [data-ir-card='evals'][data-empty] #collapseEvaluations { display: contents !important; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] .ir-eval-empty { padding: 0; font-size: 13.5px; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews { margin: 0; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews > summary { margin: 0; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] {
+  flex-basis: 100%;
+  max-height: 280px;
+  overflow: auto;
+  padding-bottom: 6px;
+}
+.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] > summary { margin: 4px 0 6px; }
+@media (max-width: 1199px) {
+  .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
+    grid-template-rows: 300px auto 400px 400px 400px 400px;
+    grid-template-areas:
+      'logtime logtime'
+      'evals evals'
+      'projects agenda'
+      'projects agenda'
+      'skills achievements'
+      'patronages patronages';
+  }
+}
+@media (max-width: 767px) {
+  .ir-home-grid > [data-ir-card='evals'][data-empty] { height: auto !important; }
+}
+
+/* Reviews opened: keep the title and Manage slots on the strip's first line. */
+.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) { align-items: flex-start; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title > .pull-right { margin-top: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title::before { margin-top: 6px; }
+
+/* Cards take their size from the grid, not from their content (a long Projects list spanning the
+   evaluations strip's row would otherwise stretch that row). The strip itself sizes to its content. */
+@media (min-width: 768px) {
+  .ir-home-grid > [data-ir-card]:not([data-ir-card='evals']) { contain: size; }
+}

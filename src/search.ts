@@ -25,7 +25,7 @@ function pages(): Item[] {
   const me = myLogin();
   const p = (label: string, href: string, sub?: string): Item => ({ group: 'Jump to', label, href, sub });
   return [
-    p('My profile', me ? `${PROFILE}/users/${me}` : PROFILE),
+    p('My profile', `${PROFILE}/`), // your home page is your full profile (content.ts sends /users/<you> there)
     ...(me ? [p('Holy graph', `https://projects.intra.42.fr/projects/graph?login=${me}`)] : []),
     p('Manage slots', `${PROFILE}/slots`),
     p('Notifications', `${PROFILE}/notifications`),
@@ -53,7 +53,7 @@ async function remote(q: string, signal: AbortSignal): Promise<Item[]> {
     getJSON<{ name: string; slug: string; url: string }>(`${PROFILE}/searches/project.json?query=${enc}`, signal),
   ]);
   return [
-    ...users.slice(0, 8).map((u): Item => ({ group: 'Students', label: u.login, href: `${PROFILE}/users/${u.login}`, img: u.cdn_uri })),
+    ...users.slice(0, 8).map((u): Item => ({ group: 'Students', label: u.login, href: u.login === myLogin() ? `${PROFILE}/` : `${PROFILE}/users/${u.login}`, img: u.cdn_uri })),
     ...projects.slice(0, 6).map((p): Item => ({ group: 'Projects', label: p.name, sub: p.slug, href: p.url })),
   ];
 }

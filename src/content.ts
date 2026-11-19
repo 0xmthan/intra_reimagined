@@ -14,10 +14,13 @@ import { mountHero } from './profile/hero';
 import { addHomePatronages } from './profile/patronages';
 import { addFinishedProjects } from './profile/projects';
 import { mergeSkillsAndExpertises } from './profile/skills';
+import { tidyEvaluations } from './profile/evaluations';
+import { layoutHome } from './profile/home-grid';
 import { renderFamilyTree } from './profile/family';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
+import { isOwnProfilePath, rememberLogin, rememberedLogin } from './me';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
 import { initNews } from './news';
 import { NEEDS_LOGIN, connect, consumeAuthRedirect, getToken, loginHint, setLoginHint } from './auth';
@@ -66,6 +69,14 @@ async function main() {
     });
   } else if (!(await loggedIn())) return; // skipped the login: leave intra exactly as it is
   if (document.getElementById(STYLE_ID)) return;
+  // Your own /users/<you> page: your home page (/) is the full version of it.
+  if (location.origin === V2_ORIGIN && isOwnProfilePath(rememberedLogin())) {
+    // Stay dark while we leave: intra's page is white until our styles would load.
+    const cover = document.createElement('style');
+    cover.textContent = 'html { background: #0b0d11 !important; } body { visibility: hidden !important; }';
+    (document.head ?? document.documentElement).appendChild(cover);
+    return void location.replace('/');
+  }
 
   injectStyles();
   initTheme();
@@ -75,6 +86,9 @@ async function main() {
   document.documentElement.classList.add(TOOLS_PENDING);
 
   await domReady();
+  // First visit (login not remembered yet): now the page shows who you are.
+  if (location.origin === V2_ORIGIN && isOwnProfilePath(rememberLogin())) return void location.replace('/');
+  sendOwnProfileLinksHome();
   pinLogo();
   tidySidebar();
   addClustersButton();
@@ -92,8 +106,22 @@ async function main() {
     addHomePatronages();
     addFinishedProjects();
     mergeSkillsAndExpertises();
+    tidyEvaluations();
+    layoutHome(); // after the cards above are merged and renamed
   }
   notifyUpdate();
+}
+
+/** Links to your own /users/<you> page go straight to your home page (no redirect on the way). */
+function sendOwnProfileLinksHome() {
+  const retarget = (e: Event) => {
+    const a = e.composedPath().find((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement && !!n.href);
+    if (!a) return;
+    const url = new URL(a.href);
+    if (url.origin === V2_ORIGIN && isOwnProfilePath(rememberedLogin(), url.pathname)) a.href = `${V2_ORIGIN}/`;
+  };
+  // Before the browser follows (or copies, middle-clicks, opens) the link.
+  for (const type of ['mousedown', 'click', 'auxclick', 'keydown'] as const) document.addEventListener(type, retarget, true);
 }
 
 /** Logged in with 42, or asks to (once per browser session; after Skip, a corner button offers it). */

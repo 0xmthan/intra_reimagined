@@ -19,6 +19,7 @@ export async function addHomePatronages() {
   const col = document.createElement('div');
   col.id = CARD_ID;
   col.className = 'col-lg-4 col-md-6 col-xs-12 fixed-height';
+  col.dataset.irCard = 'patronages'; // its place in the home grid (home-grid.ts)
   const box = document.createElement('div');
   box.className = 'container-inner-item boxed';
   box.style.overflow = 'auto';
