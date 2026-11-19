@@ -6,6 +6,8 @@
 //
 // Users install https://intra.mthan.dev/install once; after that Firefox updates them from
 // https://intra.mthan.dev/updates.json (manifest update_url), checked hourly by background.ts.
+// Chromium browsers get a page there instead, with this version's Chrome zip to load unpacked
+// (no auto-updates: Chrome only allows those from its Web Store).
 //
 // .env.release (gitignored):
 //   WEB_EXT_API_KEY, WEB_EXT_API_SECRET  AMO API credentials (addons.mozilla.org/developers/addon/api/key/)
@@ -13,7 +15,7 @@
 //   IR_DEPLOY         scp target for the releases folder   (default syn-local:Documents/intra-reimagined/releases)
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const manual = process.argv.includes('--manual');
@@ -67,8 +69,23 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
   .filter((f) => f && existsSync(f));
 run('zip', ['-q', src, ...files]);
 
+// Chrome zip: the same build, minus what only Firefox understands (its settings and update URL,
+// and the event-page background that Chrome replaces with the service worker).
+const chromeName = `intra-reimagined-${version}-chrome.zip`;
+const chrome = `release/${chromeName}`;
+const chromeDir = '.release-chrome';
+rmSync(chrome, { force: true });
+rmSync(chromeDir, { recursive: true, force: true });
+cpSync('dist', chromeDir, { recursive: true });
+const cm = JSON.parse(readFileSync(`${chromeDir}/manifest.json`, 'utf8'));
+delete cm.browser_specific_settings;
+cm.background = { service_worker: cm.background.service_worker };
+writeFileSync(`${chromeDir}/manifest.json`, JSON.stringify(cm, null, 2) + '\n');
+run('zip', ['-qr', resolve(chrome), '.'], chromeDir);
+rmSync(chromeDir, { recursive: true, force: true });
+
 if (manual) {
-  console.log(`\nReady:\n  extension: ${resolve(ext)}\n  source:    ${resolve(src)}`);
+  console.log(`\nReady:\n  extension: ${resolve(ext)}\n  chrome:    ${resolve(chrome)}\n  source:    ${resolve(src)}`);
   process.exit(0);
 }
 
@@ -115,9 +132,11 @@ writeFileSync('release/updates.json', JSON.stringify(updates, null, 2) + '\n');
 const [host, dir] = DEPLOY.split(':');
 run('ssh', [host, `mkdir -p '${dir}'`]);
 run('scp', ['-q', xpi, `${DEPLOY}/${xpiName}`]);
+run('scp', ['-q', chrome, `${DEPLOY}/${chromeName}`]);
 run('scp', ['-q', 'release/updates.json', `${DEPLOY}/updates.json`]);
 
 console.log(`\nPublished ${version}.`);
 console.log(`  install / share:  ${BASE}/install`);
 console.log(`  this version:     ${BASE}/xpi/${xpiName}`);
+console.log(`  chrome zip:       ${BASE}/chrome/${chromeName}`);
 console.log('Installed copies pick it up within the hour.');

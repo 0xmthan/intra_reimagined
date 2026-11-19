@@ -7,3 +7,4 @@ artifacts/
 release/
 server/.env
 .release-signed/
+.release-chrome/

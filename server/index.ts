@@ -7,7 +7,7 @@
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
-//   GET /install, /updates.json, /xpi/<file>  →  self-hosted extension updates (releases.ts)
+//   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
 // Run: node index.ts (Node 23.6+ runs TypeScript directly), or docker compose up. Config: .env.example.
@@ -122,7 +122,7 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
   if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
-  if (serveRelease(url.pathname, res)) return;
+  if (serveRelease(url.pathname, req, res)) return;
   if (url.pathname === '/health') {
     try {
       await db?.ping();
