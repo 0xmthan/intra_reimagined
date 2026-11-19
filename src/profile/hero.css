@@ -435,6 +435,13 @@ select option {
   backdrop-filter: blur(16px);
 }
 
+button.icon-btn {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.12);
 }

@@ -256,12 +256,13 @@ export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefin
 const IR_API = (import.meta.env.VITE_IR_API as string | undefined)?.replace(/\/+$/, '');
 
 /** GET from our server with the login-with-42 token; 'auth' = not signed in (or signed out). */
-async function irGet<T>(path: string): Promise<T | 'auth' | undefined> {
+async function irGet<T>(path: string, cache: RequestCache = 'default'): Promise<T | 'auth' | undefined> {
   const token = await getToken();
   if (!token) return 'auth';
   try {
     const res = await fetch(`${IR_API}${path}`, {
       credentials: 'omit',
+      cache,
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     });
     if (res.status === 401) {
@@ -271,6 +272,47 @@ async function irGet<T>(path: string): Promise<T | 'auth' | undefined> {
     return res.ok ? ((await res.json()) as T) : undefined;
   } catch {
     return undefined;
+  }
+}
+
+// ---------- custom banners (server/banners.ts) ----------
+
+/** Only our server's own image paths ever reach CSS (defence in depth on top of the server). */
+const BANNER_PATH = /^\/banners\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/;
+const bannerUrl = (path: unknown) => (typeof path === 'string' && BANNER_PATH.test(path) ? `${IR_API}${path}` : null);
+
+/** A full banner URL we built earlier (e.g. read back from a cache), or null if it isn't one. */
+export const checkBannerUrl = (url: unknown) =>
+  typeof url === 'string' && IR_API && url.startsWith(IR_API) ? bannerUrl(url.slice(IR_API.length)) : null;
+
+/** Someone's custom banner image URL; null = none (use the coalition cover); undefined = unknown. */
+export async function fetchBanner(login: string): Promise<string | null | undefined> {
+  if (!IR_API) return undefined;
+  // no-cache: a banner someone just changed must show right away (the image is cached by hash).
+  const j = await irGet<{ url: unknown }>(`/v1/users/${encodeURIComponent(login)}/banner`, 'no-cache');
+  return j && j !== 'auth' ? bannerUrl(j.url) : undefined;
+}
+
+export const BANNER_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+export const BANNER_MAX_BYTES = 10 * 1024 * 1024; // same as server/banners.ts MAX_BYTES
+
+/** Upload a new banner (or `null` to go back to the coalition cover). Returns the new URL or an error. */
+export async function saveBanner(file: File | null): Promise<{ url: string | null } | { error: string }> {
+  const token = await getToken();
+  if (!IR_API || !token) return { error: 'Log in with 42 first.' };
+  try {
+    const res = await fetch(`${IR_API}/v1/me/banner`, {
+      method: file ? 'PUT' : 'DELETE',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}`, ...(file ? { 'Content-Type': file.type || 'application/octet-stream' } : {}) },
+      body: file ?? undefined,
+    });
+    const j = (await res.json().catch(() => ({}))) as { url?: unknown; error?: unknown };
+    if (res.status === 401) dropToken();
+    if (!res.ok) return { error: typeof j.error === 'string' ? j.error : `Couldn't save (${res.status}).` };
+    return { url: bannerUrl(j.url) };
+  } catch {
+    return { error: "Couldn't reach the server. Try again." };
   }
 }
 

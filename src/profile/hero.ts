@@ -5,13 +5,14 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
+import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
 import { myLogin } from '../me';
 import { openPiscineList } from './piscine-list';
-import { connect } from '../auth';
+import { NEEDS_LOGIN, connect } from '../auth';
+import { openBannerEditor } from './banner';
 import { setHTML } from '../html';
 
 export const HERO_ID = 'ir-hero';
@@ -38,7 +39,29 @@ interface State {
   logWeeks?: Week[];
   pace?: PaceProfile;
   coal?: Awaited<ReturnType<typeof fetchCoalition>>;
+  /** Custom banner from our server; null = none (coalition cover), undefined = not known yet. */
+  banner?: string | null;
 }
+
+// Last known custom banner per login, so it shows from the first paint instead of swapping in
+// after the request (the URL only; the image itself is cached by the browser).
+const BANNER_CACHE = 'intra-reimagined:banner:';
+const cachedBanner = (login: string) => {
+  try {
+    // intra's own scripts can write this page's storage too: only accept one of our image URLs.
+    return checkBannerUrl(localStorage.getItem(BANNER_CACHE + login)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+const cacheBanner = (login: string, url: string | null) => {
+  try {
+    if (url) localStorage.setItem(BANNER_CACHE + login, url);
+    else localStorage.removeItem(BANNER_CACHE + login);
+  } catch {
+    /* ignore */
+  }
+};
 
 export function mountHero() {
   const banner = document.querySelector('.profile-item .profile-banner');
@@ -84,6 +107,15 @@ export function mountHero() {
     else if (!data.piscine) state.piscineLabel = (await fetchPiscineFromProfile(data.login))?.label;
     if (state.piscine || state.piscineLabel) paint();
   });
+  state.banner = cachedBanner(data.login);
+  fetchBanner(data.login).then((banner) => {
+    if (banner === undefined) return; // unknown (offline / signed out): keep what we have
+    cacheBanner(data.login, banner);
+    if (banner !== state.banner) {
+      state.banner = banner;
+      paint();
+    }
+  });
   fetchEvalStats(data.login, data.own ? undefined : myLogin()).then((evals) => {
     state.evals = evals ?? null;
     paint();
@@ -109,6 +141,18 @@ export function mountHero() {
   // Piscine chip → everyone from that piscine; "Connect" → login with 42 for our server.
   hero.addEventListener('click', (e) => {
     if ((e.target as Element).closest('[data-act="connect"]')) return void connect();
+    if ((e.target as Element).closest('[data-act="banner"]')) {
+      return void openBannerEditor({
+        current: state.banner ?? null,
+        coalCover: state.coal?.cover ?? state.data.cover,
+        editHref: state.data.links.edit,
+        onSaved: (url) => {
+          state.banner = url;
+          cacheBanner(state.data.login, url);
+          paint();
+        },
+      });
+    }
     const avatar = (e.target as Element).closest<HTMLImageElement>('img.avatar');
     if (avatar) return void openAvatar(avatar);
     if (!(e.target as Element).closest('[data-act="piscine"]') || !state.piscine) return;
@@ -278,13 +322,13 @@ function togetherHtml(login: string, t?: EvalStats['together']) {
   return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
 }
 
-function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals }: State) {
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals, banner }: State) {
   // Coalition look for the selected cursus. Until that cursus's data has loaded, keep showing the
   // previous one as a whole (intra's banner may be half-switched), never a mix of the two.
   const c = goalsLoaded
     ? coal
     : (coal ?? (d.coalition ? { name: d.coalition.name, color: d.coalition.color, score: d.coalition.score, rank: d.coalition.rank } : undefined));
-  const cover = coal?.cover ?? (goalsLoaded || !coal ? d.cover : undefined);
+  const cover = banner || (coal?.cover ?? (goalsLoaded || !coal ? d.cover : undefined));
   hero.style.setProperty('--coal', c?.color ?? '#00babc');
   if (cover || goalsLoaded) hero.style.setProperty('--cover', cover ? `url("${cover}")` : 'none');
 
@@ -369,7 +413,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         <div class="actions">
           ${d.links.graph ? `<a class="icon-btn" href="${esc(d.links.graph)}" data-tip="Holy graph">${icon('graph')}</a>` : ''}
           ${d.links.resume ? `<a class="icon-btn" href="${esc(d.links.resume)}" data-tip="Resume">${icon('resume')}</a>` : ''}
-          ${d.links.edit ? `<a class="icon-btn" href="${esc(d.links.edit)}" data-tip="Edit profile">${icon('edit')}</a>` : ''}
+          ${d.own && NEEDS_LOGIN
+            ? `<button class="icon-btn" data-act="banner" data-tip="Change banner">${icon('edit')}</button>`
+            : d.links.edit ? `<a class="icon-btn" href="${esc(d.links.edit)}" data-tip="Edit profile">${icon('edit')}</a>` : ''}
           ${!d.own && d.email ? `<a class="icon-btn" href="mailto:${esc(d.email)}" data-tip="Send email">${icon('mail')}</a>` : ''}
         </div>
       </section>
