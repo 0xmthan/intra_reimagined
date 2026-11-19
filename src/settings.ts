@@ -8,9 +8,11 @@ type BoolSetting = keyof Settings;
 
 const TOGGLES: { key: BoolSetting; title: string; desc: string }[] = [
   { key: 'darkMode', title: 'Dark mode', desc: 'Use a dark theme on every intra page.' },
-  { key: 'sidebarTools', title: 'No top bar', desc: "Move search (⌘K), notifications and your account menu into the sidebar and remove intra's top bar." },
-  { key: 'newHeader', title: 'New profile header', desc: "Redesigned header on profile pages. Turn off for intra's original banner." },
 ];
+
+/** The installed version, from the manifest (vite.config.ts copies it from package.json). */
+const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
+  (globalThis as { chrome?: { runtime: { getManifest(): { version: string } } } }).chrome)?.runtime.getManifest().version;
 
 const BUTTON_ID = 'ir-settings-button';
 const PILL_ID = 'ir-settings-pill';
@@ -80,7 +82,7 @@ function addSettingsSection() {
   section.hidden = true;
   setHTML(section, `
     <div class="col-sm-12">
-      <h4 class="font-weight-bold text-uppercase">Intra Reimagined</h4>
+      <h4 class="font-weight-bold text-uppercase">Intra Reimagined${VERSION ? ` <span class="ir-setting-version">v${VERSION}</span>` : ''}</h4>
       ${TOGGLES.map(
         (t) => `
       <div class="ir-setting">

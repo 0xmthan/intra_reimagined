@@ -72,6 +72,14 @@ html.ir-logo-pinned .main-navbar {
   font-size: 13px;
 }
 
+.ir-setting-version {
+  margin-left: 6px;
+  color: #999;
+  font-size: 13px;
+  font-weight: normal;
+  text-transform: none;
+}
+
 .ir-switch {
   position: relative;
   flex-shrink: 0;

@@ -5,13 +5,12 @@ import darkCss from './dark.css?inline';
 
 const css = baseCss + darkCss;
 import { addSettingsButton } from './settings';
-import { addPaceTimeline, isProfilePage } from './pace/timeline';
+import { isProfilePage } from './pace/timeline';
 import { runPaceBridge } from './pace/bridge';
 import { V2_ORIGIN, V3_ORIGIN } from './pace/types';
 import { initTheme } from './theme';
 import { pinLogo } from './logo';
-import { mountHero, unmountHero } from './profile/hero';
-import { getSettings, onSettingsChange } from './store';
+import { mountHero } from './profile/hero';
 import { setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
@@ -65,18 +64,18 @@ async function main() {
 
   injectStyles();
   initTheme();
-  // Settings are async and our header / sidebar tools need the parsed page, so hide what they
-  // replace right away (per-origin mirrors of the settings decide it), until they're in place.
-  if (location.origin === V2_ORIGIN && isProfilePage() && hint(HERO_HINT)) document.documentElement.classList.add(HERO_PENDING);
-  if (hint(TOOLS_HINT)) document.documentElement.classList.add(TOOLS_PENDING);
+  // Our header and sidebar tools need the parsed page; hide what they replace until then.
+  if (location.origin === V2_ORIGIN && isProfilePage()) document.documentElement.classList.add(HERO_PENDING);
+  document.documentElement.classList.add(TOOLS_PENDING);
 
   await domReady();
   pinLogo();
   tidySidebar();
   addClustersButton();
   addSettingsButton();
-  initSidebarTools();
-  if (location.origin === V2_ORIGIN && isProfilePage()) await initProfileHeader();
+  setSidebarTools(true);
+  document.documentElement.classList.remove(TOOLS_PENDING);
+  if (location.origin === V2_ORIGIN && isProfilePage()) mountHero();
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
 }
@@ -116,58 +115,7 @@ async function offerV2() {
   else dismiss('stayOnV3');
 }
 
-async function initSidebarTools() {
-  const on = (await getSettings()).sidebarTools;
-  setHint(TOOLS_HINT, on);
-  setSidebarTools(on);
-  document.documentElement.classList.remove(TOOLS_PENDING);
-  onSettingsChange((s) => {
-    setHint(TOOLS_HINT, s.sidebarTools);
-    setSidebarTools(s.sidebarTools);
-  });
-}
-
-/** New header (default) or the classic banner + our timeline; switchable live from settings. */
-async function initProfileHeader() {
-  const apply = (useNew: boolean) => {
-    if (useNew) {
-      document.getElementById('ir-pace-timeline')?.remove();
-      document.getElementById('ir-max-deadline')?.remove();
-      mountHero();
-    } else {
-      unmountHero();
-      addPaceTimeline();
-    }
-  };
-  let current = (await getSettings()).newHeader;
-  setHint(HERO_HINT, current);
-  apply(current);
-  onSettingsChange((s) => {
-    if (s.newHeader !== current) apply((current = s.newHeader));
-    setHint(HERO_HINT, s.newHeader);
-  });
-}
-
-// Per-origin mirrors of on-by-default settings, readable at document_start (see main).
 const HERO_PENDING = 'ir-hero-pending';
-const HERO_HINT = 'intra-reimagined:newHeader';
 const TOOLS_PENDING = 'ir-topbar-pending';
-const TOOLS_HINT = 'intra-reimagined:sidebarTools';
-
-function hint(key: string): boolean {
-  try {
-    return localStorage.getItem(key) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-function setHint(key: string, on: boolean) {
-  try {
-    localStorage.setItem(key, on ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
-}
 
 main();
