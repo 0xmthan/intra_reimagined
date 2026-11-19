@@ -1,13 +1,17 @@
 # Intra Reimagined API. Node 26 runs the TypeScript sources directly (type stripping): no build step.
-FROM node:26-alpine
 
+# Install production dependencies with pnpm (Node 25+ no longer ships corepack, so install it).
+FROM node:26-alpine AS deps
 WORKDIR /app
-RUN corepack enable
-
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
+RUN npm install -g "$(node -p "require('./package.json').packageManager")" \
+ && pnpm install --prod --frozen-lockfile
 
-COPY *.ts ./
+# Runtime: node + node_modules + sources, no pnpm.
+FROM node:26-alpine
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json *.ts ./
 
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787
 EXPOSE 8787
