@@ -69,8 +69,9 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
   .filter((f) => f && existsSync(f));
 run('zip', ['-q', src, ...files]);
 
-// Chrome zip: the same build, minus what only Firefox understands (its settings and update URL,
-// and the event-page background that Chrome replaces with the service worker).
+// Chrome zip: the same build, minus what only Firefox understands (its settings and update URL),
+// and with the background script as a service worker (Chrome's MV3 has no event pages; AMO
+// warns about service_worker, so only this zip gets it).
 const chromeName = `intra-reimagined-${version}-chrome.zip`;
 const chrome = `release/${chromeName}`;
 const chromeDir = '.release-chrome';
@@ -79,7 +80,7 @@ rmSync(chromeDir, { recursive: true, force: true });
 cpSync('dist', chromeDir, { recursive: true });
 const cm = JSON.parse(readFileSync(`${chromeDir}/manifest.json`, 'utf8'));
 delete cm.browser_specific_settings;
-cm.background = { service_worker: cm.background.service_worker };
+cm.background = { service_worker: cm.background.scripts[0] };
 writeFileSync(`${chromeDir}/manifest.json`, JSON.stringify(cm, null, 2) + '\n');
 run('zip', ['-qr', resolve(chrome), '.'], chromeDir);
 rmSync(chromeDir, { recursive: true, force: true });
