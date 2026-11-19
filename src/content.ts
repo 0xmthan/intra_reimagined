@@ -14,6 +14,7 @@ import { mountHero, unmountHero } from './profile/hero';
 import { getSettings, onSettingsChange } from './store';
 import { setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
+import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
 
 const STYLE_ID = 'intra-reimagined-styles';
 
@@ -37,6 +38,15 @@ async function main() {
     if (window !== window.top) runPaceBridge();
     return;
   }
+  // The clusters map framed in our Clusters window: themed, but none of the page chrome.
+  if (isEmbedFrame()) {
+    if (document.getElementById(STYLE_ID)) return;
+    injectStyles();
+    initTheme();
+    await domReady();
+    initEmbed();
+    return;
+  }
   if (window !== window.top || document.getElementById(STYLE_ID)) return;
 
   injectStyles();
@@ -45,6 +55,7 @@ async function main() {
   await domReady();
   pinLogo();
   tidySidebar();
+  addClustersButton();
   addSettingsButton();
   initSidebarTools();
   if (location.origin === V2_ORIGIN && isProfilePage()) initProfileHeader();

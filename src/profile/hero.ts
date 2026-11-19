@@ -173,7 +173,10 @@ function togetherHtml(login: string, t?: EvalStats['together']) {
   if (!t) return '';
   const n = t.youEvaluatedThem + t.theyEvaluatedYou;
   if (!n) return `<div class="together muted">You and ${esc(login)} haven't evaluated each other yet</div>`;
-  const tip = `You evaluated them ${t.youEvaluatedThem}× · they evaluated you ${t.theyEvaluatedYou}×`;
+  const times = (k: number) => (k === 1 ? 'once' : k === 2 ? 'twice' : `${k} times`);
+  const you = t.youEvaluatedThem ? `You evaluated them ${times(t.youEvaluatedThem)}` : 'You never evaluated them';
+  const they = t.theyEvaluatedYou ? `they evaluated you ${times(t.theyEvaluatedYou)}` : 'they never evaluated you';
+  const tip = `${you} · ${they}`;
   return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
 }
 

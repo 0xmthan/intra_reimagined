@@ -488,3 +488,30 @@ html.ir-scroll-lock,
 html.ir-scroll-lock body {
   overflow: hidden !important;
 }
+
+/* ---------- Clusters icon + embedded clusters map (clusters.ts) ---------- */
+#ir-clusters-button svg {
+  width: 27px;
+  height: 27px;
+}
+.app-sidebar-left li.ir-moved {
+  display: none !important;
+}
+/* Inside our Clusters window: only the map. */
+html.ir-embed :is(.page-sidebar, .left-sidebar-fix, .main-navbar, #ir-logo, #ir-side-tools, footer, .footer) {
+  display: none !important;
+}
+html.ir-embed :is(.page, .page-content) {
+  margin: 0 !important;
+  padding-left: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+html.ir-embed .page-content > .row {
+  margin: 0 !important;
+}
+html.ir-embed .page-content .container-item {
+  margin: 12px !important;
+  width: auto !important;
+}

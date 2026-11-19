@@ -27,7 +27,11 @@ export function tidySidebar() {
   // Their pages now live under Meta.
   if (movedWasActive) nav.querySelector<HTMLAnchorElement>(`a[href^="${META}"]`)?.classList.replace('inactive', 'active');
 
-  if (location.origin === META) addToMetaMenu(links);
+  if (location.origin === META) {
+    addToMetaMenu(links);
+    // Clusters has its own icon in the main sidebar now (clusters.ts).
+    document.querySelector('.app-sidebar-left a.sidebar-link[href="/clusters"]')?.closest('li')?.classList.add('ir-moved');
+  }
 }
 
 function addToMetaMenu(links: { href: string; label: string; icon: string }[]) {

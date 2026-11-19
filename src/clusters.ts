@@ -1,0 +1,120 @@
+// Clusters: a sidebar icon that opens meta's clusters map in a window over the current page,
+// with a button to open it as its own page. The map page is framed (rules.json lets just that page be framed
+// by intra) and runs in "embed" mode (see initEmbed): no intra sidebar/top bar, and following a
+// link (e.g. a student's seat) loads that page in the whole tab, which also closes the window.
+import css from './clusters.css?inline';
+import { setHTML } from './html';
+
+export const CLUSTERS_URL = 'https://meta.intra.42.fr/clusters';
+export const EMBED_PARAM = 'ir-embed';
+const BUTTON_ID = 'ir-clusters-button';
+const HOST_ID = 'ir-clusters';
+
+const ICON = {
+  map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6.5v13.5L9 17.5l6 2.5 6-2.5V4l-6 2.5L9 4Z"/><path d="M9 4v13.5M15 6.5V20"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+};
+
+/** Adds the Clusters icon to intra's main sidebar, right after Projects. */
+export function addClustersButton() {
+  const list = document.querySelector('.main-left-navbar > div') ?? document.querySelector('.main-left-navbar');
+  if (!list || document.getElementById(BUTTON_ID)) return;
+  const li = document.createElement('li');
+  li.id = BUTTON_ID;
+  setHTML(li, `<a class="inactive" href="${CLUSTERS_URL}" aria-label="Clusters">${ICON.map}<span class="visible-overlay"> Clusters </span></a>`);
+  const projects = [...list.querySelectorAll(':scope > li')].find((l) => l.querySelector('a[href^="https://projects.intra.42.fr"]'));
+  list.insertBefore(li, projects?.nextSibling ?? null);
+  li.querySelector('a')!.addEventListener('click', (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // new tab/window: let it be
+    e.preventDefault();
+    openClusters();
+  });
+}
+
+let host: HTMLElement | undefined;
+let onKey: ((e: KeyboardEvent) => void) | undefined;
+
+function close() {
+  host?.remove();
+  host = undefined;
+  if (onKey) document.removeEventListener('keydown', onKey, true);
+  document.documentElement.classList.remove('ir-scroll-lock');
+}
+
+export function openClusters() {
+  if (host) return;
+  host = document.createElement('div');
+  host.id = HOST_ID;
+  const root = host.attachShadow({ mode: 'open' });
+  setHTML(
+    root,
+    `<style>${css}</style>
+     <div class="bg">
+       <section class="win" role="dialog" aria-label="Clusters">
+         <header>
+           <h2>${ICON.map} Clusters</h2>
+           <div class="btns">
+             <a class="btn" href="${CLUSTERS_URL}" title="Open as a page">${ICON.expand}</a>
+             <button class="btn x" title="Close (Esc)">✕</button>
+           </div>
+         </header>
+         <div class="body">
+           <div class="loading">Loading clusters…</div>
+           <iframe src="${CLUSTERS_URL}?${EMBED_PARAM}=1" title="Clusters"></iframe>
+         </div>
+       </section>
+     </div>`,
+  );
+  document.body.appendChild(host);
+  document.documentElement.classList.add('ir-scroll-lock');
+
+  const bg = root.querySelector<HTMLElement>('.bg')!;
+  const frame = root.querySelector('iframe')!;
+  frame.addEventListener('load', () => root.querySelector('.loading')?.remove(), { once: true });
+  // Intra's map navigates with script (clicking a seat sets location), not plain links, so the
+  // embed-side click handler can't catch it. Catch it here: whenever the frame lands on a page
+  // other than the map, close the window and open that page in the whole tab. (A profile page is
+  // same-origin with this one, so its URL is readable; other origins fall back to the link handler.)
+  frame.addEventListener('load', () => {
+    let href: string | undefined;
+    try {
+      href = frame.contentWindow?.location.href;
+    } catch {
+      return; // cross-origin (the map itself, from profile/projects pages): nothing to do
+    }
+    if (!href || href === 'about:blank' || href.startsWith(CLUSTERS_URL)) return;
+    close();
+    location.href = href;
+  });
+
+  root.querySelector('.x')!.addEventListener('click', close);
+  bg.addEventListener('mousedown', (e) => e.target === bg && close());
+  onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    close();
+  };
+  document.addEventListener('keydown', onKey, true);
+}
+
+/** Inside the framed clusters page: just the map, and real links navigate the whole tab. */
+export function initEmbed() {
+  document.documentElement.classList.add('ir-embed');
+  document.addEventListener(
+    'click',
+    (e) => {
+      const a = (e.target as Element).closest?.<HTMLAnchorElement>('a[href]');
+      if (!a || e.defaultPrevented || e.button !== 0) return;
+      const url = new URL(a.href, location.href);
+      // In-page things (tabs, "#" handlers, toggles) stay inside the map.
+      if (url.href.split('#')[0] === location.href.split('#')[0] || a.hasAttribute('data-toggle')) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return; // new tab/window: browser default
+      e.preventDefault();
+      window.top!.location.href = url.href;
+    },
+    true,
+  );
+}
+
+export const isEmbedFrame = () =>
+  window !== window.top && location.origin === 'https://meta.intra.42.fr' && new URLSearchParams(location.search).has(EMBED_PARAM);
