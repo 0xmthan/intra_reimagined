@@ -61,6 +61,8 @@ export type FramePopup = {
   url: string;
   title: string;
   icon: string;
+  /** Extra query parameters for the framed page (e.g. the seat to show on the map). */
+  params?: Record<string, string>;
   /** Pages the frame may move to and stay in the window (the rest open in the whole tab). */
   stays?: (href: string) => boolean;
   onClose?: () => void;
@@ -75,6 +77,7 @@ export function openFramePopup(o: FramePopup) {
   const stays = o.stays ?? ((href: string) => href.startsWith(o.url));
   const src = new URL(o.url);
   src.searchParams.set(EMBED_PARAM, '1');
+  for (const [k, v] of Object.entries(o.params ?? {})) src.searchParams.set(k, v);
   const root = host.attachShadow({ mode: 'open' });
   setHTML(
     root,
@@ -136,7 +139,17 @@ export function openFramePopup(o: FramePopup) {
   document.addEventListener('keydown', onKey, true);
 }
 
-export const openClusters = () => openFramePopup({ url: CLUSTERS_URL, title: 'Clusters', icon: ICON.map });
+export const SEAT_PARAM = 'ir-seat';
+const SEAT = /^[a-z0-9]{2,20}$/i;
+
+/** The clusters map in our window; with `seat` (e.g. "k0m07s03"), on that floor, zoomed to it. */
+export const openClusters = (seat?: string) =>
+  openFramePopup({
+    url: CLUSTERS_URL,
+    title: seat && SEAT.test(seat) ? `Clusters · ${seat}` : 'Clusters',
+    icon: ICON.map,
+    params: seat && SEAT.test(seat) ? { [SEAT_PARAM]: seat.toLowerCase() } : undefined,
+  });
 
 /** Inside the framed clusters page: just the map, and real links navigate the whole tab. */
 export function initEmbed() {

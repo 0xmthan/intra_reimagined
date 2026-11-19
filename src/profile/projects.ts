@@ -224,7 +224,7 @@ export function appendMarks(list: HTMLElement, marks: Element, login?: string) {
   if (login) void addOutstanding(section, login);
 }
 
-/** ★ n before a mark: how many "Outstanding project" flags that project got (from our server). */
+/** A ★ per "Outstanding project" flag a project got (from our server), in place of its mark's ✓. */
 async function addOutstanding(section: HTMLElement, login: string) {
   const counts = await fetchOutstanding(login);
   if (!counts) return;
@@ -232,14 +232,19 @@ async function addOutstanding(section: HTMLElement, login: string) {
     // The project a row stands for: a project's own row (data-project), or the link to its attempt.
     const href = [...row.querySelectorAll<HTMLAnchorElement>('a[href*="/projects_users/"]')].pop()?.getAttribute('href') ?? '';
     const slug = row.classList.contains('main-project-item') && !row.classList.contains('parent-item') ? row.dataset.project : href.match(/\/projects\/([^/]+)\/projects_users\//)?.[1];
+    // A project's attempts (#0, #1…) would only repeat its total: counted per project, not per try.
+    if (!row.classList.contains('main-project-item') && !row.classList.contains('parent')) continue;
     const n = slug ? counts[slug] : 0;
     if (!n || row.querySelector('.ir-outstanding')) continue;
     const star = document.createElement('span');
     star.className = 'ir-outstanding';
-    star.textContent = `★ ${n}`;
+    star.textContent = '★'.repeat(Math.min(n, 5)); // one per flag (5 at most)
     star.title = `${n} outstanding flag${n === 1 ? '' : 's'}`;
+    // In place of the mark's ✓ (its icon-font glyph is hidden), right before the number.
     const mark = row.querySelector(':scope > .pull-right, :scope > .marked-title > .pull-right');
-    if (mark) mark.before(star);
-    else row.append(star);
+    if (mark) {
+      mark.classList.add('ir-starred');
+      mark.prepend(star);
+    } else row.append(star);
   }
 }

@@ -1,4 +1,5 @@
-// Hovering a login (intra marks them [data-tooltip-login]) shows a card: the student's photo filling
+// Hovering a login (intra marks them [data-tooltip-login]), or any link to someone's profile (the
+// Evaluations card, project pages, clusters map seats), shows a card: the student's photo filling
 // it, their name over a dark fade at the bottom, and where they are. Replaces intra's
 // own tooltip (hidden in styles.css), which lost its photo ("url(undefined)") and sat on a flat
 // teal box. Same data source as intra's: /users/<login>?ams=true, cached for the session.
@@ -174,10 +175,26 @@ function hide() {
   card?.classList.remove('on');
 }
 
-async function show(link: Element) {
-  const login = link.getAttribute('data-tooltip-login');
-  if (!login) return;
-  const base = link.getAttribute('data-tooltip-url') || location.origin;
+const PROFILE = 'https://profile.intra.42.fr';
+const PROFILE_LINK = /^https:\/\/profile\.intra\.42\.fr\/users\/([a-z0-9-]{1,32})\/?$/i;
+// Menus and our own buttons: a card popping up there would be in the way.
+const SKIP = '.main-left-navbar, .dropdown-menu, #ir-side-tools, .main-navbar, #ir-logo';
+
+/** The student a hovered element stands for: intra's tooltip mark, or a link to their profile. */
+function target(el: Element | null): { el: Element; login: string } | undefined {
+  const marked = el?.closest?.('[data-tooltip-login]');
+  if (marked) {
+    const login = marked.getAttribute('data-tooltip-login');
+    return login ? { el: marked, login } : undefined;
+  }
+  const a = el?.closest?.<HTMLAnchorElement>('a[href]');
+  const login = a?.href.match(PROFILE_LINK)?.[1];
+  if (!a || !login || a.closest(SKIP)) return undefined;
+  return { el: a, login };
+}
+
+async function show(link: Element, login: string) {
+  const base = link.getAttribute('data-tooltip-url') || (location.origin === PROFILE ? location.origin : PROFILE);
   const c = ensureCard();
   const info = await load(login, base);
   if (current !== link || !info) return;
@@ -195,12 +212,12 @@ async function show(link: Element) {
 
 export function initUserTooltips() {
   document.addEventListener('mouseover', (e) => {
-    const link = (e.target as Element).closest?.('[data-tooltip-login]');
-    if (link === current) return;
+    const t = target(e.target as Element);
+    if (t?.el === current) return;
     hide();
-    if (!link) return;
-    current = link;
-    timer = window.setTimeout(() => void show(link), DELAY);
+    if (!t) return;
+    current = t.el;
+    timer = window.setTimeout(() => void show(t.el, t.login), DELAY);
   });
   addEventListener('scroll', hide, { capture: true, passive: true });
   addEventListener('blur', hide);

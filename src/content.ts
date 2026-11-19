@@ -67,6 +67,7 @@ async function main() {
     reworkSlotsPage();
     reworkAchievementsPage();
     initClusterZoom();
+    initUserTooltips(); // students on the clusters map
     return;
   }
   if (window !== window.top || document.getElementById(STYLE_ID)) return;

@@ -1805,11 +1805,59 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
   vertical-align: -1px;
 }
 .ir-retries svg { width: 11px; height: 11px; }
+.pull-right.ir-starred::before { display: none !important; } /* the ✓: the stars take its place */
 .ir-outstanding {
-  float: right;
-  margin: 0 10px 0 6px;
+  margin-right: 6px;
+  letter-spacing: 1px;
   color: #f5c451;
-  font-size: 12.5px;
+  font-size: 17px;
+  line-height: 1;
+  vertical-align: -1px;
   font-weight: 600;
   white-space: nowrap;
 }
+/* The seat our Clusters window was opened for (clusters-zoom.ts): a steady ring, and a pulse. */
+.ir-seat-mark { fill: rgba(0, 186, 188, 0.14); stroke: #00babc; stroke-width: 3; pointer-events: none; }
+.ir-seat-ring {
+  fill: none;
+  stroke: #00babc;
+  stroke-width: 2;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ir-seat-ping 1.4s ease-out infinite;
+}
+@keyframes ir-seat-ping {
+  0% { opacity: 1; transform: scale(0.8); }
+  70% { opacity: 0.15; transform: scale(1.8); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+/* In our Clusters window a whole floor fits the window's height (no scrolling to find someone). */
+html.ir-embed .map-container > svg { display: block; max-height: calc(100vh - 110px); width: 100%; margin: 0 auto; }
+/* The floor's name, shown over the map once it has zoomed out to it, then fading away. */
+.ir-floor-name {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: clamp(22px, 5vw, 44px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.9);
+  background: radial-gradient(closest-side, rgba(11, 13, 17, 0.55), transparent);
+  animation: ir-floor-name 2.2s ease forwards;
+}
+@keyframes ir-floor-name {
+  0% { opacity: 0; transform: scale(0.96); }
+  18% { opacity: 1; transform: none; }
+  65% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ir-floor-name { animation-name: ir-floor-name-plain; }
+  @keyframes ir-floor-name-plain { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}
+.map-container.ir-dragging > svg, .map-container.ir-dragging > svg * { cursor: grabbing !important; }

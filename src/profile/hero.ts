@@ -14,6 +14,7 @@ import { openPiscineList } from './piscine-list';
 import { NEEDS_LOGIN, connect } from '../auth';
 import { openBannerEditor } from './banner';
 import { setHTML } from '../html';
+import { openClusters } from '../clusters';
 
 export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
@@ -404,7 +405,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             ${d.cursus.options.length > 1
               ? `<label class="chip btn pick-cursus" data-tip="Cursus and grade">${esc(d.cursus.options.find((o) => o.value === d.cursus.value)?.label ?? d.cursus.value)}${grade} ▾<select data-cursus aria-label="Cursus">${d.cursus.options.map((o) => `<option value="${esc(o.value)}" ${o.value === d.cursus.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`
               : `<span class="chip" data-tip="Cursus and grade">${esc(d.cursus.value)}${grade}</span>`}
-            <span class="chip ${d.location.available ? '' : 'off'}">${icon('seat')} ${esc(d.location.text)}</span>
+            ${d.location.available
+              ? `<button class="chip btn" data-act="seat" data-tip="Show on the clusters map">${icon('seat')} ${esc(d.location.text)}</button>`
+              : `<span class="chip off">${icon('seat')} ${esc(d.location.text)}</span>`}
             ${d.campus ? `<span class="chip">${icon('pin')} ${esc(d.campus)}</span>` : ''}
             ${d.email ? `<a class="chip btn" href="mailto:${esc(d.email)}">${icon('mail')} ${esc(d.email)}</a>` : ''}
           </div>
@@ -510,5 +513,6 @@ function bind(hero: HTMLElement, d: HeroData) {
   });
 
   hero.querySelector('[data-act="copy"]')?.addEventListener('click', () => navigator.clipboard?.writeText(d.login));
+  hero.querySelector('[data-act="seat"]')?.addEventListener('click', () => openClusters(d.location.text));
   hero.querySelector('[data-act="give"]')?.addEventListener('click', () => d.giveEl?.click());
 }
