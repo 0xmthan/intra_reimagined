@@ -12,6 +12,7 @@ import { initTheme } from './theme';
 import { pinLogo } from './logo';
 import { mountHero } from './profile/hero';
 import { addHomePatronages } from './profile/patronages';
+import { renderFamilyTree } from './profile/family';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
@@ -78,7 +79,11 @@ async function main() {
   addSettingsButton();
   setSidebarTools(true);
   document.documentElement.classList.remove(TOOLS_PENDING);
-  if (location.origin === V2_ORIGIN && isProfilePage()) mountHero();
+  if (location.origin === V2_ORIGIN && isProfilePage()) {
+    mountHero();
+    const pane = document.querySelector('#patronages');
+    if (pane) renderFamilyTree(pane);
+  }
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
   if (location.origin === V2_ORIGIN && location.pathname === '/') addHomePatronages();

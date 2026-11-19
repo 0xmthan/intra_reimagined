@@ -2,6 +2,7 @@
 // page and show its patronages (who you patron, who patrons you) as one more card in the home grid,
 // using intra's own markup so intra's styles (and our dark mode) apply as on the profile page.
 import { myLogin } from '../me';
+import { renderFamilyTree } from './family';
 
 const CARD_ID = 'ir-home-patronages';
 
@@ -11,10 +12,12 @@ export async function addHomePatronages() {
   if (!login || !grid || document.getElementById(CARD_ID)) return;
 
   let pane: Element | null;
+  let page: Document;
   try {
     const res = await fetch(`/users/${encodeURIComponent(login)}`, { credentials: 'include', headers: { Accept: 'text/html' } });
     if (!res.ok) return;
-    pane = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('#patronages');
+    page = new DOMParser().parseFromString(await res.text(), 'text/html');
+    pane = page.querySelector('#patronages');
   } catch {
     return;
   }
@@ -33,6 +36,7 @@ export async function addHomePatronages() {
   // It keeps its id: intra's patronage styles hang off #patronages (the home page has none).
   const content = document.importNode(pane, true);
   content.classList.add('active');
+  renderFamilyTree(content, page);
   box.append(title, content);
   col.append(box);
   grid.append(col);

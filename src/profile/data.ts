@@ -336,6 +336,61 @@ export async function fetchPiscine(login: string): Promise<ApiPiscine | undefine
   return { label: date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }), month: j.month, year: j.year, campusId: j.campusId ?? null };
 }
 
+export interface FamilyLink {
+  patron: string;
+  child: string;
+  ongoing: boolean;
+  since: string;
+}
+export interface Family {
+  login: string;
+  /** login → avatar (only https images from intra's CDN get through). */
+  people: Map<string, string | undefined>;
+  links: FamilyLink[];
+  truncated: boolean;
+}
+
+const FAMILY_LOGIN = /^[a-z0-9-]{1,32}$/i;
+const CDN_IMAGE = /^https:\/\/cdn\.intra\.42\.fr\/[^"'\\\s()]+$/;
+
+/** Someone's patronage family (ancestors and descendants) from our server; checked field by field. */
+export async function fetchFamily(login: string): Promise<Family | 'auth' | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ login?: unknown; people?: unknown; links?: unknown; truncated?: unknown }>(
+    `/v1/users/${encodeURIComponent(login)}/family`,
+  );
+  if (!j || j === 'auth') return j;
+  return checkFamily(j);
+}
+
+function checkFamily(j: { login?: unknown; people?: unknown; links?: unknown; truncated?: unknown }): Family | undefined {
+  if (typeof j.login !== 'string' || !(FAMILY_LOGIN.test(j.login) || j.login === '-') || !j.people || typeof j.people !== 'object' || !Array.isArray(j.links))
+    return undefined;
+  const people = new Map<string, string | undefined>();
+  for (const [l, v] of Object.entries(j.people as Record<string, { image?: unknown }>)) {
+    if (!FAMILY_LOGIN.test(l)) continue;
+    const img = v && typeof v.image === 'string' && CDN_IMAGE.test(v.image) ? v.image : undefined;
+    people.set(l, img);
+  }
+  const links = (j.links as Record<string, unknown>[]).flatMap((x) =>
+    x && typeof x.patron === 'string' && typeof x.child === 'string' && people.has(x.patron) && people.has(x.child)
+      ? [{ patron: x.patron, child: x.child, ongoing: x.ongoing !== false, since: typeof x.since === 'string' ? x.since.slice(0, 10) : '' }]
+      : [],
+  );
+  if (j.login !== '-' && !people.has(j.login)) people.set(j.login, undefined);
+  return { login: j.login, people, links, truncated: j.truncated === true };
+}
+
+/** Every patronage family at your campus (people on both sides), from our server. */
+export async function fetchCampusFamilies(): Promise<Pick<Family, 'people' | 'links'> | 'auth' | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ people?: unknown; links?: unknown }>('/v1/patronages');
+  if (!j || j === 'auth') return j;
+  // Same checks as fetchFamily, with a stand-in for its required login.
+  const f = checkFamily({ ...j, login: '-' });
+  return f && { people: f.people, links: f.links };
+}
+
 export interface PiscineStudent {
   login: string;
   name: string;
