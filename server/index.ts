@@ -4,6 +4,7 @@
 //   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
 //   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
 //                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
+//   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
@@ -26,6 +27,7 @@ import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
 import { Auth } from './auth.ts';
 import { FamilyService } from './family.ts';
+import { OutstandingService } from './outstanding.ts';
 import { CampusMembers } from './campus.ts';
 import { BannerError, MAX_BYTES, MIME, bannerPath, processUpload, readBody, serveBanner, type ImageType } from './banners.ts';
 
@@ -63,6 +65,7 @@ const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefin
 if (db) await db.init();
 else console.warn('No DATABASE_URL: data is only cached in memory.');
 const evals = new EvalService(api, db);
+const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
 const campusMembers = new CampusMembers(api, db);
@@ -274,7 +277,7 @@ const server = createServer(async (req, res) => {
   }
 
   const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);
-  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family)$/i);
+  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family|outstanding)$/i);
   if (!m && !(pm && MONTHS.includes(pm[3]))) return send(res, 404, { error: 'not found' });
 
   const me = auth.verify(req);
@@ -295,6 +298,7 @@ const server = createServer(async (req, res) => {
   const login = m[1].toLowerCase();
   try {
     if (m[2] === 'family') return send(res, 200, await family.get(login), { 'Cache-Control': 'private, max-age=600' });
+    if (m[2] === 'outstanding') return send(res, 200, await outstanding.get(login), { 'Cache-Control': 'private, max-age=600' });
     if (m[2] === 'piscine') {
       const piscine = await getPiscine(login);
       if (!piscine) return send(res, 404, { error: 'unknown login' });

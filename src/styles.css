@@ -227,11 +227,24 @@ html.ir-hero-on #ir-pace-timeline {
 html.ir-hero-pending .profile-item .profile-banner {
   visibility: hidden !important;
 }
-/* Same for intra's top bar until topbar.ts has moved its contents into the sidebar (desktop only). */
-@media (min-width: 769px) {
-  html.ir-topbar-pending .main-navbar {
-    display: none !important;
-  }
+/* Same for intra's top bar until topbar.ts has moved its contents into the sidebar. */
+html.ir-topbar-pending .main-navbar {
+  display: none !important;
+}
+/* The page itself until our layout is in place (content.ts), then a quick fade in: intra's version
+   of the page never flashes. The background, sidebar and logo stay. */
+html.ir-page-pending .page-content {
+  visibility: hidden !important;
+}
+html.ir-page-shown .page-content {
+  animation: ir-page-in 0.16s ease-out;
+}
+@keyframes ir-page-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.ir-page-shown .page-content { animation: none; }
 }
 
 /* ---------- no top bar: search, notifications, help and account live in the sidebar (topbar.ts) ---------- */
@@ -779,15 +792,25 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   .ir-home-grid > [data-ir-card] { grid-area: auto !important; height: 420px !important; }
   .ir-home-grid > [data-ir-card='projects'] { height: 560px !important; }
   .ir-home-grid > [data-ir-card='logtime'] { height: auto !important; }
+  /* Stacked, in reading order (intra's DOM order starts with Agenda). */
+  .ir-home-grid > [data-ir-card='logtime'] { order: 1; }
+  .ir-home-grid > [data-ir-card='evals'] { order: 2; }
+  .ir-home-grid > [data-ir-card='projects'] { order: 3; }
+  .ir-home-grid > [data-ir-card='agenda'] { order: 4; }
+  .ir-home-grid > [data-ir-card='achievements'] { order: 5; height: 560px !important; }
+  .ir-home-grid > [data-ir-card='skills'] { order: 6; }
+  .ir-home-grid > [data-ir-card='patronages'] { order: 7; }
 }
 
 /* Evaluations with nothing real coming up: a slim full-width strip, and Patronages gets wide. */
 .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
-  grid-template-rows: 320px auto 430px 430px;
+  /* Achievements reaches up into Projects' column (rows 4–5), so pinned ones and the list fit. */
+  grid-template-rows: 320px auto 280px 130px 430px;
   grid-template-areas:
     'projects logtime logtime'
     'projects evals evals'
     'projects patronages agenda'
+    'achievements patronages agenda'
     'achievements skills agenda';
 }
 .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item {
@@ -842,11 +865,13 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
       'projects agenda'
       'projects agenda'
       'skills achievements'
-      'patronages patronages';
+      'patronages achievements';
   }
 }
 @media (max-width: 767px) {
   .ir-home-grid > [data-ir-card='evals'][data-empty] { height: auto !important; }
+  /* One column: the areas above would otherwise still make two (one of them 0 wide). */
+  .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) { grid-template-rows: none; grid-template-areas: none; }
 }
 
 /* Reviews opened: keep the title and Manage slots on the strip's first line. */
@@ -869,17 +894,17 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   grid-template-rows: 320px 430px 430px;
   grid-template-areas:
     'projects logtime logtime'
-    'projects skills achievements'
-    'projects patronages patronages';
+    'projects patronages achievements'
+    'projects skills achievements';
 }
 @media (max-width: 1199px) {
   .row.ir-home-grid.ir-user-grid {
     grid-template-rows: 300px 400px 400px 400px;
     grid-template-areas:
       'logtime logtime'
-      'projects skills'
+      'projects patronages'
       'projects achievements'
-      'patronages patronages';
+      'skills achievements';
   }
 }
 @media (max-width: 767px) {
@@ -1412,8 +1437,8 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 .ir-tier.platinum { --t: #8fe3ff; }
 .ir-tier.dot { margin-left: 7px; vertical-align: 1px; }
 .ir-tier.dot::before { width: 6px; height: 6px; box-shadow: none; }
-.ir-ach-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -8px; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
-.ir-ach-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 7px 8px; margin: 0 -8px; border-radius: 10px; }
+.ir-ach-list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ir-ach-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 7px 8px; margin: 0; border-radius: 10px; }
 .ir-ach-row:hover { background: rgba(255, 255, 255, 0.04); }
 .ir-ach-badge { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
 .ir-ach-badge img { width: 44px; height: 44px; object-fit: contain; }
@@ -1469,7 +1494,7 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 .ir-ach-stackbody { margin: 2px 0 0 26px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--t, #8b93a7) 30%, transparent); }
 .ir-ach-stackbody .ir-ach-row { margin-left: 0; }
 /* Pinned achievements: two larger cards above the progress. */
-.ir-ach-pinned { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+.ir-ach-pinned { display: flex; flex-direction: column; gap: 8px; }
 .ir-ach-pinned[hidden] { display: none; }
 .ir-ach-pincard {
   position: relative;
@@ -1490,6 +1515,9 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 .ir-ach-pincard .ir-ach-badge { width: 56px; height: 56px; border-radius: 14px; }
 .ir-ach-pincard .ir-ach-badge img { width: 48px; height: 48px; }
 .ir-ach-pincard .ir-ach-pin { position: absolute; top: 6px; right: 6px; }
+.ir-ach-pincard .ir-ach-text { padding-right: 24px; }
+.ir-ach-pincard .ir-ach-desc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ir-ach-pincard .ir-ach-when { font-size: 11px; color: var(--ir-faint, #737a8a); margin-top: 2px; }
 /* Pin button: shows on hover; filled teal when pinned. */
 .ir-ach-pin {
   display: grid;
@@ -1513,3 +1541,275 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 .ir-ach-row:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px; }
 .ir-ach-list .ir-ach-row.ir-ach-stackhead:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px 14px; }
 .ir-ach-error { font-size: 12px; color: #ff8a8a; }
+
+/* ---------- achievements page (profile/achievements-page.ts) ---------- */
+html.ir-achp-page .achievements-container { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+.ir-ap { padding: 24px 28px 40px; color: var(--ir-text, #e2e4ea); }
+.ir-ap-top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 10px 16px;
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+}
+.ir-ap-big b { font-size: 40px; font-weight: 600; line-height: 1; }
+.ir-ap-big span { font-size: 15px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-pct { font-size: 18px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-top .ir-ach-bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; }
+.ir-ap-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-stats b { font-weight: 600; color: var(--ir-text, #e2e4ea); }
+.ir-ap-wallet { color: #f5c451; }
+
+.ir-ap-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 20px 0 16px; }
+.ir-ap-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-right: auto; }
+.ir-ap-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ir-muted, #a1a7b5);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ir-ap-tabs button span { font-size: 11px; opacity: 0.7; }
+.ir-ap-tabs button:hover { color: var(--ir-text, #e2e4ea); background: rgba(255, 255, 255, 0.08); }
+.ir-ap-tabs button[aria-selected='true'] { background: rgba(0, 186, 188, 0.16); border-color: rgba(0, 186, 188, 0.35); color: #00babc; }
+.ir-ap-tools .ir-sort button { font-size: 12px; padding: 4px 12px; }
+.ir-ap-search {
+  width: 220px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--ir-text, #e2e4ea) !important;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.ir-ap-search:focus { border-color: rgba(0, 186, 188, 0.5) !important; }
+
+.ir-ap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.ir-ap-card {
+  --t: #8b93a7;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--t) 22%, rgba(255, 255, 255, 0.06));
+  border-radius: 16px;
+  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--t) 12%, transparent), transparent 55%), rgba(255, 255, 255, 0.025);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.ir-ap-card[hidden] { display: none; }
+.ir-ap-card.bronze { --t: #cd8a4f; }
+.ir-ap-card.silver { --t: #c4ccd8; }
+.ir-ap-card.gold { --t: #f5c451; }
+.ir-ap-card.platinum { --t: #8fe3ff; }
+.ir-ap-card.series { cursor: pointer; }
+.ir-ap-card.series:hover { border-color: color-mix(in srgb, var(--t) 50%, transparent); }
+.ir-ap-card.locked { --t: #6b7280; background: rgba(255, 255, 255, 0.015); }
+.ir-ap-card.locked .ir-ap-cardhead .ir-ap-badge img { filter: grayscale(1); opacity: 0.45; }
+.ir-ap-card.locked h3 { color: var(--ir-muted, #a1a7b5); }
+.ir-ap-cardhead { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
+.ir-ap-badge { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
+.ir-ap-badge img { width: 54px; height: 54px; object-fit: contain; }
+.ir-ap-badge.sm { width: 40px; height: 40px; border-radius: 10px; }
+.ir-ap-badge.sm img { width: 32px; height: 32px; }
+.ir-ap-cardtext { min-width: 0; }
+.ir-ap-card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ir-text, #e2e4ea); }
+.ir-ap-desc { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-pips { display: flex; align-items: center; gap: 4px; margin: 2px 0 6px; }
+.ir-ap-pips i { width: 16px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.ir-ap-pips i.on { background: var(--t); }
+.ir-ap-pips i.on.bronze { background: #cd8a4f; }
+.ir-ap-pips i.on.silver { background: #c4ccd8; }
+.ir-ap-pips i.on.gold { background: #f5c451; }
+.ir-ap-pips i.on.platinum { background: #8fe3ff; }
+.ir-ap-pips span { margin-left: 6px; font-size: 11px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-earned { color: #3ddc84; }
+.ir-ap-lockedtag { color: var(--ir-faint, #737a8a); }
+.ir-ap-title { padding: 1px 8px; border-radius: 999px; background: rgba(199, 125, 255, 0.14); color: #d4a5ff; font-size: 11px; }
+.ir-ap-next { font-size: 12px; color: var(--ir-muted, #a1a7b5); padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.035); }
+.ir-ap-next b { color: var(--ir-text, #e2e4ea); font-weight: 600; margin-right: 4px; }
+.ir-ap-levels { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ir-ap-level { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 4px; }
+.ir-ap-level:not(.done) .ir-ap-badge img { filter: grayscale(1); opacity: 0.4; }
+.ir-ap-level:not(.done) .ir-ap-levelname { color: var(--ir-muted, #a1a7b5); }
+.ir-ap-levelname { font-size: 13px; }
+.ir-ap-leveldesc { font-size: 11.5px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-levelside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; }
+.ir-ap-level.done .ir-ap-levelside > :first-child { color: #3ddc84; }
+.ir-ap-empty { text-align: center; color: var(--ir-muted, #a1a7b5); padding: 40px 0; }
+html.ir-embed .ir-ap { padding: 18px 20px 28px; }
+
+/* A short Achievements card (narrow layouts): pinned ones become one compact line each. */
+@media (min-width: 768px) {
+  .ir-home-grid > [data-ir-card='achievements'] > .container-inner-item { container: ir-ach / size; }
+}
+@container ir-ach (max-height: 500px) {
+  .ir-ach-pincard { grid-template-columns: 40px 1fr; gap: 10px; padding: 6px 10px; border-radius: 12px; }
+  .ir-ach-pincard .ir-ach-badge { width: 40px; height: 40px; border-radius: 10px; }
+  .ir-ach-pincard .ir-ach-badge img { width: 34px; height: 34px; }
+  .ir-ach-pincard .ir-ach-desc { -webkit-line-clamp: 1; }
+  .ir-ach-pincard .ir-ach-when { display: none; }
+  .ir-ach-pincard .ir-ach-pin { top: 50%; transform: translateY(-50%); }
+  .ir-ach-pinned { gap: 6px; }
+  .ir-ach { gap: 10px; }
+}
+/* Long names shorten; the tier dot and the levels chip keep their size. */
+.ir-ach-name { display: flex; align-items: center; min-width: 0; }
+.ir-ach-nametext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-ach-name > .ir-tier.dot, .ir-ach-name > .ir-ach-levels { flex: none; }
+
+/* Phones: no sidebar column, so the logo scrolls away with intra's top bar instead of floating over the page. */
+@media (max-width: 767px) {
+  html.ir-logo-pinned #ir-logo { position: absolute !important; }
+  /* The empty Evaluations strip: title and buttons on top, the rest on its own line. */
+  .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item { flex-wrap: wrap !important; }
+  .ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { order: 1; margin-left: auto !important; }
+  .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { order: 2; flex: 1 1 100%; flex-wrap: wrap !important; }
+}
+
+/* Behind the card grid the page stays the page color: the dark theme sometimes paints intra's
+   .page-content as a box (#14171d), and the see-through glass cards would turn grey over it. */
+html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !important; }
+
+/* ---------- phones: the sidebar becomes a bottom tab bar (Instagram-like); no top bar ---------- */
+@media (max-width: 768px) {
+  html.ir-no-topbar .main-navbar { display: none !important; }
+  html.ir-no-topbar .page-sidebar {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    transform: none !important;
+    z-index: 1000;
+    pointer-events: auto;
+  }
+  html.ir-no-topbar .main-left-navbar {
+    position: static !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: space-around;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom)) !important;
+    background: rgba(13, 15, 20, 0.88) !important;
+    backdrop-filter: blur(14px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+    overflow: visible !important;
+  }
+  /* The page's links and our tools share one row; the rest is in the account menu or the web app. */
+  html.ir-no-topbar .main-left-navbar > ._,
+  html.ir-no-topbar #ir-side-tools { display: contents !important; }
+  html.ir-no-topbar .main-left-navbar > .admin-links,
+  html.ir-no-topbar #ir-side-tools::before,
+  html.ir-no-topbar .main-left-navbar > ._ > li:not(:has(a[href^='https://profile.intra.42.fr']:not([href*='/edit'])), :has(a[href^='https://projects.intra.42.fr']), #ir-clusters-button),
+  html.ir-no-topbar #ir-side-tools .ir-help { display: none !important; }
+  html.ir-no-topbar .main-left-navbar li { padding: 0 !important; margin: 0 !important; flex: 1 1 0; display: flex; justify-content: center; }
+  html.ir-no-topbar .main-left-navbar > ._ > li > a,
+  html.ir-no-topbar #ir-side-tools .ir-tool > a,
+  html.ir-no-topbar #ir-side-tools .ir-account > .dropdown > a {
+    width: 52px !important;
+    height: 48px !important;
+    display: grid !important;
+    place-items: center;
+    font-size: 24px !important;
+  }
+  html.ir-no-topbar .main-left-navbar > ._ > li > a::before { inset: 4px 6px !important; border-radius: 12px; }
+  html.ir-no-topbar .main-left-navbar > ._ > li > a.active::after { left: 18px; right: 18px; top: auto; bottom: -4px; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
+  html.ir-no-topbar .main-left-navbar svg { width: 24px; height: 24px; }
+  html.ir-no-topbar .main-left-navbar .visible-overlay,
+  html.ir-no-topbar #ir-side-tools .ir-tool-label { display: none !important; }
+  html.ir-no-topbar #ir-side-tools .ir-account .user-profile-picture { width: 30px !important; height: 30px !important; }
+  /* Menus open upward from the bar. */
+  html.ir-no-topbar #ir-side-tools .ir-account .dropdown-menu { top: auto !important; bottom: calc(100% + 8px) !important; right: 4px !important; left: auto !important; }
+  html.ir-no-topbar .notifications-container { left: 8px !important; right: 8px !important; bottom: calc(70px + env(safe-area-inset-bottom)) !important; width: auto !important; max-height: 70vh; }
+  /* Room for the bar under the page; nothing reserved for the old side column or top bar. */
+  html.ir-no-topbar body { padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important; }
+  html.ir-no-topbar .page-content { margin-left: 0 !important; padding-top: 0 !important; }
+  html.ir-logo-pinned #ir-logo { display: none !important; }
+}
+
+/* Phones: achievement rows a size smaller, and the card a bit taller. */
+@media (max-width: 767px) {
+  .ir-home-grid > [data-ir-card='achievements'] { height: 640px !important; }
+  .ir-ach-row, .ir-ach-row:has(> .ir-ach-pin) { grid-template-columns: 44px minmax(0, 1fr) auto 24px; gap: 10px; padding: 6px; }
+  .ir-ach-list .ir-ach-row.ir-ach-stackhead, .ir-ach-list .ir-ach-row.ir-ach-stackhead:has(> .ir-ach-pin) { grid-template-columns: 44px minmax(0, 1fr) auto 24px 12px; }
+  .ir-ach-row:not(:has(> .ir-ach-pin)) { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .ir-ach-list .ir-ach-row.ir-ach-stackhead:not(:has(> .ir-ach-pin)) { grid-template-columns: 44px minmax(0, 1fr) auto 12px; }
+  .ir-ach-badge { width: 44px; height: 44px; border-radius: 10px; }
+  .ir-ach-badge img { width: 36px; height: 36px; }
+  .ir-ach-levels { display: none; }
+  .ir-ach-pin { opacity: 1; width: 24px; height: 24px; } /* no hover on touch: always there */
+  .ir-ach-pin:not([aria-pressed='true']) { opacity: 0.45; }
+}
+@media (max-width: 768px) {
+  html.ir-no-topbar .main-left-navbar > ._ > li > a.active::after { display: none; } /* the tinted tile is enough on the bar */
+}
+@media (max-width: 768px) {
+  /* intra hides the notifications panel on phones (hidden-xs); the bell is in our bar, so show it when open. */
+  html.ir-no-topbar .notifications-container.hidden-xs.open { display: block !important; }
+}
+
+/* ---------- clusters map zoom (clusters-zoom.ts) ---------- */
+.map-container.ir-zoomable { position: relative; }
+.map-container.ir-zoomable > svg { touch-action: none; } /* our pinch and pan, not the page's */
+.map-container.ir-zoomed > svg { cursor: grab; }
+.ir-zoom-reset {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(13, 15, 20, 0.85);
+  backdrop-filter: blur(8px);
+  color: #e2e4ea;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ir-zoom-reset[hidden] { display: none; }
+@media (max-width: 768px) {
+  /* Meta's own second menu sits beside ours and would stretch the bar to its height. */
+  html.ir-no-topbar .page-sidebar > :not(.main-left-navbar) { display: none !important; }
+}
+/* intra's achievement tiles don't flash in the card while ours loads (achievements.ts). */
+[data-ir-card='achievements'] > .container-inner-item[data-ir-ach='1'] > :is(.achievement-item, #achievements, .vertical-list) { visibility: hidden; }
+
+/* Marks: retries and outstanding flags next to a project (projects.ts). */
+.ir-retries {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  color: var(--ir-faint, #737a8a);
+  font-size: 12px;
+  white-space: nowrap;
+  vertical-align: -1px;
+}
+.ir-retries svg { width: 11px; height: 11px; }
+.ir-outstanding {
+  float: right;
+  margin: 0 10px 0 6px;
+  color: #f5c451;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}

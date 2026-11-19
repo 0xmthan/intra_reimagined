@@ -254,4 +254,17 @@ const CSS = `
 .bar:hover span { background: #2ee6e8; }
 .bar em { font-style: normal; font-size: 10.5px; color: var(--faint); }
 .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 4px; }
+
+/* Phones: tiles in two rows of three; the heatmap above the weekly bars. */
+@media (max-width: 768px) {
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tile { box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
+  .tile:nth-child(3n + 1) { box-shadow: 0 -1px 0 var(--line); }
+  .tile:nth-child(-n + 3) { box-shadow: -1px 0 0 var(--line); }
+  .tile:first-child { box-shadow: none; }
+  .big { font-size: 21px; }
+  .lower { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .heat { overflow-x: auto; }
+  .weeks { min-height: 150px; }
+}
 `;

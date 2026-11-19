@@ -62,7 +62,7 @@ export function layoutUserPage() {
       h.textContent = 'In progress';
       list.prepend(h);
     }
-    appendMarks(list, marks);
+    appendMarks(list, marks, login);
   }
   projCol.dataset.irCard = 'projects';
   skillsCol.dataset.irCard = 'skills';

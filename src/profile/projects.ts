@@ -3,7 +3,7 @@
 // it. This copies that "Marks" list into the card, under the current ones, as intra's own markup, so
 // it looks and behaves as on the profile page. Follows intra's cursus select like the rest of the card.
 import { myLogin } from '../me';
-import { fetchProfilePage } from './data';
+import { fetchOutstanding, fetchProfilePage } from './data';
 
 const LIST_ID = 'ir-home-marks';
 const REC_ID = 'ir-home-recommended';
@@ -111,7 +111,7 @@ export async function addFinishedProjects() {
   if (recommended.length) list.append(recommendedSection(recommended));
   if (!marks?.querySelector('.main-project-item')) return;
 
-  appendMarks(list, marks);
+  appendMarks(list, marks, myLogin());
 }
 
 /**
@@ -119,7 +119,10 @@ export async function addFinishedProjects() {
  * Newest / A–Z picker and intra's cursus select applied. Used on your home page (from your fetched
  * profile page) and on others' profile pages (from the page itself, user-page.ts).
  */
-export function appendMarks(list: HTMLElement, marks: Element) {
+const RETRY_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+
+export function appendMarks(list: HTMLElement, marks: Element, login?: string) {
   const section = document.createElement('div');
   section.id = LIST_ID;
   const head = document.createElement('div');
@@ -147,6 +150,21 @@ export function appendMarks(list: HTMLElement, marks: Element) {
   for (const d of body.querySelectorAll<HTMLElement>('[data-long-date]')) {
     const at = when(d);
     if (Number.isFinite(at)) d.textContent = ago(at);
+  }
+
+  // Retries: a project's dropdown has a row per attempt ("ft_printf #0", "#1", …). Not for parents
+  // like Rushes, whose rows are its separate parts.
+  for (const item of body.querySelectorAll<HTMLElement>('.main-project-item:not(.parent-item)')) {
+    const target = item.dataset.target;
+    const attempts = target ? body.querySelectorAll(`${target.split('.').filter(Boolean).map((c) => `.${CSS.escape(c)}`).join('')} .project-item`).length : 0;
+    if (attempts < 2) continue;
+    const tag = document.createElement('span');
+    tag.className = 'ir-retries';
+    // A retry icon and the count, quietly; the tooltip says it in words.
+    const icon = new DOMParser().parseFromString(RETRY_ICON, 'image/svg+xml').documentElement;
+    tag.append(document.importNode(icon, true), String(attempts - 1));
+    tag.title = `${attempts - 1} ${attempts === 2 ? 'retry' : 'retries'} (${attempts} attempts)`;
+    (item.querySelector('.caret') ?? item.querySelector('.project-item-lighteable'))?.before(tag);
   }
 
   // A project and its dropdown rows (retries, rush parts) move together.
@@ -202,4 +220,26 @@ export function appendMarks(list: HTMLElement, marks: Element) {
   };
   select?.addEventListener('change', () => setTimeout(filter, 0));
   filter();
+
+  if (login) void addOutstanding(section, login);
+}
+
+/** ★ n before a mark: how many "Outstanding project" flags that project got (from our server). */
+async function addOutstanding(section: HTMLElement, login: string) {
+  const counts = await fetchOutstanding(login);
+  if (!counts) return;
+  for (const row of section.querySelectorAll<HTMLElement>('.project-item')) {
+    // The project a row stands for: a project's own row (data-project), or the link to its attempt.
+    const href = [...row.querySelectorAll<HTMLAnchorElement>('a[href*="/projects_users/"]')].pop()?.getAttribute('href') ?? '';
+    const slug = row.classList.contains('main-project-item') && !row.classList.contains('parent-item') ? row.dataset.project : href.match(/\/projects\/([^/]+)\/projects_users\//)?.[1];
+    const n = slug ? counts[slug] : 0;
+    if (!n || row.querySelector('.ir-outstanding')) continue;
+    const star = document.createElement('span');
+    star.className = 'ir-outstanding';
+    star.textContent = `★ ${n}`;
+    star.title = `${n} outstanding flag${n === 1 ? '' : 's'}`;
+    const mark = row.querySelector(':scope > .pull-right, :scope > .marked-title > .pull-right');
+    if (mark) mark.before(star);
+    else row.append(star);
+  }
 }

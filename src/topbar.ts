@@ -2,13 +2,12 @@
 // sidebar: search (our palette, see search.ts), notifications, "Have a problem?" and the account
 // menu. The bell and the account dropdown are intra's own elements, moved (not copied), so intra's
 // scripts keep driving them: fetching notifications, marking them read, the Bootstrap dropdown.
-// On narrow screens intra's mobile layout needs its top bar (hamburger menu), so everything goes
-// back where it came from below 769px, and when the setting is switched off.
+// On phones the sidebar becomes a bottom tab bar (styles.css), so the tools stay in it there too;
+// everything goes back where it came from when the setting is switched off.
 import { setHTML } from './html';
 import { openSearch } from './search';
 
 const TOOLS_ID = 'ir-side-tools';
-const DESKTOP = '(min-width: 769px)'; // intra switches to its mobile layout at max-width: 768px
 const ON_CLASS = 'ir-no-topbar';
 
 const ICON = {
@@ -26,7 +25,6 @@ interface Moved {
 }
 
 let moved: Moved[] = [];
-let media: MediaQueryList | undefined;
 let enabled = false;
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -94,15 +92,11 @@ function unmount() {
   document.documentElement.classList.remove(ON_CLASS);
 }
 
-const sync = () => (enabled && media?.matches ? mount() : unmount());
+const sync = () => (enabled ? mount() : unmount());
 
 /** Turn the sidebar tools on or off (from the settings switch). */
 export function setSidebarTools(on: boolean) {
   enabled = on;
-  if (!media) {
-    media = matchMedia(DESKTOP);
-    media.addEventListener('change', sync);
-  }
   sync();
 }
 

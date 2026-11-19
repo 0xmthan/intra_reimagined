@@ -28,6 +28,8 @@ import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
 import { interceptSlotLinks, reworkSlotsPage } from './slots';
 import { initUserTooltips } from './user-tooltip';
 import { reworkAchievements } from './profile/achievements';
+import { reworkAchievementsPage } from './profile/achievements-page';
+import { initClusterZoom } from './clusters-zoom';
 import { initNews } from './news';
 import { NEEDS_LOGIN, connect, consumeAuthRedirect, getToken, loginHint, setLoginHint } from './auth';
 import { ask, dismiss, dismissed, loginPill } from './gate';
@@ -63,6 +65,8 @@ async function main() {
     await domReady();
     initEmbed();
     reworkSlotsPage();
+    reworkAchievementsPage();
+    initClusterZoom();
     return;
   }
   if (window !== window.top || document.getElementById(STYLE_ID)) return;
@@ -88,13 +92,36 @@ async function main() {
   injectStyles();
   initTheme();
   initSearchShortcut();
-  // Our header and sidebar tools need the parsed page; hide what they replace until then.
+  // Our header and sidebar tools need the parsed page; hide what they replace until then. The page
+  // itself stays hidden too until our layout is in place, so intra's version never flashes (and
+  // shows anyway after a few seconds, whatever happens).
   if (location.origin === V2_ORIGIN && isProfilePage()) document.documentElement.classList.add(HERO_PENDING);
-  document.documentElement.classList.add(TOOLS_PENDING);
+  document.documentElement.classList.add(TOOLS_PENDING, PAGE_PENDING);
+  const reveal = () => {
+    if (!document.documentElement.classList.contains(PAGE_PENDING)) return;
+    document.documentElement.classList.remove(PAGE_PENDING);
+    document.documentElement.classList.add(PAGE_SHOWN);
+  };
+  let failsafe: ReturnType<typeof setTimeout> | undefined;
+  void domReady().then(() => (failsafe = setTimeout(reveal, 3000)));
+  let leaving = false;
+  try {
+    leaving = (await build()) === 'leaving';
+  } finally {
+    clearTimeout(failsafe);
+    if (!leaving) requestAnimationFrame(reveal); // after the layout above has been applied
+  }
+  notifyUpdate();
+}
 
+/** Everything we do to the page once it has parsed; 'leaving' when it redirects instead. */
+async function build(): Promise<'leaving' | void> {
   await domReady();
   // First visit (login not remembered yet): now the page shows who you are.
-  if (location.origin === V2_ORIGIN && isOwnProfilePath(rememberLogin())) return void location.replace('/');
+  if (location.origin === V2_ORIGIN && isOwnProfilePath(rememberLogin())) {
+    location.replace('/');
+    return 'leaving';
+  }
   sendOwnProfileLinksHome();
   pinLogo();
   tidySidebar();
@@ -114,6 +141,8 @@ async function main() {
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
   reworkSlotsPage();
+  reworkAchievementsPage();
+  initClusterZoom();
   if (location.origin === V2_ORIGIN && location.pathname === '/') {
     addHomePatronages();
     addFinishedProjects();
@@ -124,7 +153,6 @@ async function main() {
     reworkAgenda();
     void reworkAchievements(myLogin());
   }
-  notifyUpdate();
 }
 
 /** Links to your own /users/<you> page go straight to your home page (no redirect on the way). */
@@ -181,5 +209,7 @@ async function offerV2() {
 
 const HERO_PENDING = 'ir-hero-pending';
 const TOOLS_PENDING = 'ir-topbar-pending';
+const PAGE_PENDING = 'ir-page-pending';
+const PAGE_SHOWN = 'ir-page-shown';
 
 main();

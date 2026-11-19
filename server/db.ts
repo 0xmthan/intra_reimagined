@@ -98,6 +98,13 @@ export class Db {
         updated_at timestamptz not null default now()
       )`;
     await this.#sql`create index if not exists banners_hash on banners (hash)`;
+    // Outstanding flags each student got, per project slug (outstanding.ts).
+    await this.#sql`
+      create table if not exists outstanding (
+        login        text primary key,
+        projects     jsonb not null,
+        refreshed_at timestamptz not null default now()
+      )`;
     // Up to two achievements each student pins on their Achievements card (by name).
     await this.#sql`
       create table if not exists achievement_pins (
@@ -190,6 +197,18 @@ export class Db {
 
   async deleteBanner(login: string) {
     await this.#sql`delete from banners where login = ${login}`;
+  }
+
+  async getOutstanding(login: string): Promise<{ login: string; projects: Record<string, number>; refreshedAt: Date } | undefined> {
+    const [row] = await this.#sql<{ login: string; projects: Record<string, number>; refreshedAt: Date }[]>`
+      select login, projects, refreshed_at as "refreshedAt" from outstanding where login = ${login}`;
+    return row;
+  }
+
+  async saveOutstanding(login: string, projects: Record<string, number>) {
+    await this.#sql`
+      insert into outstanding (login, projects) values (${login}, ${this.#sql.json(projects)})
+      on conflict (login) do update set projects = excluded.projects, refreshed_at = now()`;
   }
 
   async getPins(login: string): Promise<string[]> {

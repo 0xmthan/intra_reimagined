@@ -316,6 +316,18 @@ export async function saveBanner(file: File | null): Promise<{ url: string | nul
   }
 }
 
+// ---------- outstanding flags per project (server: /v1/users/:login/outstanding) ----------
+
+/** Outstanding flags `login` got, by project slug; undefined = unknown (no server, signed out). */
+export async function fetchOutstanding(login: string): Promise<Record<string, number> | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ projects: unknown }>(`/v1/users/${encodeURIComponent(login)}/outstanding`);
+  if (!j || j === 'auth' || typeof j.projects !== 'object' || !j.projects) return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(j.projects)) if (typeof v === 'number' && v > 0 && /^[\w.-]{1,80}$/.test(k)) out[k] = v;
+  return out;
+}
+
 // ---------- pinned achievements (server: /v1/users/:login/pins, /v1/me/pins) ----------
 
 const pinList = (v: unknown) => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string').slice(0, 2) : []);

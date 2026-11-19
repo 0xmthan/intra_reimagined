@@ -112,10 +112,58 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
   viewport.addEventListener('scroll', edges, { passive: true });
   new ResizeObserver(edges).observe(viewport);
   new MutationObserver(() => requestAnimationFrame(edges)).observe(viewport, { childList: true });
+  dragToPan(viewport);
 
   // The page's one level right away, then the whole line from our server.
   show(page.family);
   void fetchFamily(owner).then((f) => f && f !== 'auth' && show(f));
+}
+
+/**
+ * Click and drag (mouse or pen) moves the tree around, like a map; touch already scrolls it natively.
+ * A drag that ends on a person doesn't open their profile; a plain click still does.
+ */
+function dragToPan(viewport: HTMLElement) {
+  let start: { x: number; y: number; l: number; t: number; id: number } | undefined;
+  let dragged = false;
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch' || e.button !== 0) return;
+    if (viewport.scrollWidth <= viewport.clientWidth && viewport.scrollHeight <= viewport.clientHeight) return; // nothing to pan
+    start = { x: e.clientX, y: e.clientY, l: viewport.scrollLeft, t: viewport.scrollTop, id: e.pointerId };
+    dragged = false;
+  });
+  viewport.addEventListener('pointermove', (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!dragged && Math.hypot(dx, dy) < 5) return; // still a click
+    if (!dragged) {
+      dragged = true;
+      viewport.setPointerCapture(e.pointerId);
+      viewport.classList.add('dragging');
+    }
+    viewport.scrollLeft = start.l - dx;
+    viewport.scrollTop = start.t - dy;
+  });
+  const end = (e: PointerEvent) => {
+    if (!start || e.pointerId !== start.id) return;
+    start = undefined;
+    viewport.classList.remove('dragging');
+  };
+  viewport.addEventListener('pointerup', end);
+  viewport.addEventListener('pointercancel', end);
+  viewport.addEventListener(
+    'click',
+    (e) => {
+      if (!dragged) return;
+      dragged = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
+  );
+  // Links and images would otherwise start the browser's own drag-and-drop.
+  viewport.addEventListener('dragstart', (e) => e.preventDefault());
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string) {
@@ -331,9 +379,11 @@ export const TREE_CSS = `
 const CSS = `
 :host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text, #e2e4ea); --tree-bg: var(--ir-surface-2, #1b1f27); }
 .viewport {
-  overflow: auto; max-height: 330px;
+  overflow: auto; max-height: 330px; cursor: grab;
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
+.viewport.dragging { cursor: grabbing; user-select: none; }
+.viewport.dragging * { cursor: grabbing !important; }
 .frame { position: relative; }
 /* Home card: the tree takes the card's whole height (its buttons are in the card's title). */
 :host([fill]) { height: 100%; display: flex; flex-direction: column; }

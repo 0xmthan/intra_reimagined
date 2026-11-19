@@ -22,11 +22,14 @@ export function addClustersButton() {
   if (!list || document.getElementById(BUTTON_ID)) return;
   const li = document.createElement('li');
   li.id = BUTTON_ID;
-  setHTML(li, `<a class="inactive" href="${CLUSTERS_URL}" aria-label="Clusters">${ICON.map}<span class="visible-overlay"> Clusters </span></a>`);
+  const here = location.origin + location.pathname.replace(/\/$/, '') === CLUSTERS_URL;
+  setHTML(li, `<a class="${here ? 'active' : 'inactive'}" href="${CLUSTERS_URL}" aria-label="Clusters">${ICON.map}<span class="visible-overlay"> Clusters </span></a>`);
+  // On the map, intra marks Meta as the current page (it's on meta's site): it's Clusters here.
+  if (here) list.querySelector('a.active[href="https://meta.intra.42.fr"]')?.classList.replace('active', 'inactive');
   const projects = [...list.querySelectorAll(':scope > li')].find((l) => l.querySelector('a[href^="https://projects.intra.42.fr"]'));
   list.insertBefore(li, projects?.nextSibling ?? null);
   li.querySelector('a')!.addEventListener('click', (e) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // new tab/window: let it be
+    if (here || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // on the map already, or a new tab: let it be
     e.preventDefault();
     openClusters();
   });

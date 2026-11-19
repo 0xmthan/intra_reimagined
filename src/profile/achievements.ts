@@ -11,7 +11,46 @@ import { myLogin } from '../me';
 const DAY = 86_400_000;
 const TIERS: Record<string, string> = { easy: 'bronze', medium: 'silver', hard: 'gold', challenge: 'platinum' };
 
-type Ach = { name: string; desc: string; img?: string; date?: number; tier?: string; reward?: string; kind?: string; series: string; level: number };
+export type Ach = {
+  name: string;
+  desc: string;
+  img?: string;
+  date?: number;
+  tier?: string;
+  reward?: string; // "+500₳ Title: …", as intra's tooltip says it
+  wallet?: string; // "500₳"
+  title?: string; // a title it gives
+  kind?: string;
+  series: string;
+  level: number;
+  done: boolean;
+  ongoing: boolean; // the next levels of a series you've started
+};
+
+/** Every achievement on an achievements page (intra's #achievement-list), earned or not. */
+export function parseAchievements(doc: Document | Element): Ach[] {
+  return [...doc.querySelectorAll<HTMLElement>('#achievement-list > .achievement-item')].map((i): Ach => {
+    const h = i.querySelector('.achievement-item--content > h1');
+    const when = i.querySelector('.achieved p')?.textContent?.trim();
+    const t = when ? Date.parse(when) : NaN;
+    const tip = h?.querySelector('[data-toggle="tooltip"]')?.getAttribute('title') ?? h?.querySelector('[data-original-title]')?.getAttribute('data-original-title') ?? '';
+    return {
+      name: h?.firstChild?.textContent?.trim() ?? '',
+      desc: i.querySelector('.achievement-item--content > p')?.textContent?.trim() ?? '',
+      img: i.querySelector<HTMLImageElement>('.achievement-item--image img')?.getAttribute('src') ?? undefined,
+      date: Number.isFinite(t) ? t : undefined,
+      tier: TIERS[i.dataset.tier ?? ''],
+      reward: /^Wallet/.test(tip) ? tip.replace(/^Wallet:\s*/, '+') : undefined,
+      wallet: tip.match(/Wallet:\s*(\d+\s*₳)/)?.[1],
+      title: tip.match(/Title:\s*(.+)$/)?.[1]?.trim(),
+      kind: i.dataset.kind,
+      series: i.dataset.name ?? h?.firstChild?.textContent?.trim() ?? '',
+      level: Number(i.dataset.position) || 1,
+      done: i.dataset.done === 'true',
+      ongoing: !!i.dataset.ongoing,
+    };
+  });
+}
 
 const memo = new Map<string, Promise<{ done: Ach[]; total: number } | undefined>>();
 
@@ -22,33 +61,15 @@ function load(login: string) {
     const res = await fetch(`/users/${encodeURIComponent(login)}/achievements`, { credentials: 'include', headers: { Accept: 'text/html' } });
     if (!res.ok) return undefined;
     const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-    const items = [...doc.querySelectorAll<HTMLElement>('#achievement-list > .achievement-item')];
-    const done = items
-      .filter((i) => i.dataset.done === 'true')
-      .map((i): Ach => {
-        const h = i.querySelector('.achievement-item--content > h1');
-        const when = i.querySelector('.achieved p')?.textContent?.trim();
-        const t = when ? Date.parse(when) : NaN;
-        return {
-          name: h?.firstChild?.textContent?.trim() ?? '',
-          desc: i.querySelector('.achievement-item--content > p')?.textContent?.trim() ?? '',
-          img: i.querySelector<HTMLImageElement>('.achievement-item--image img')?.getAttribute('src') ?? undefined,
-          date: Number.isFinite(t) ? t : undefined,
-          tier: TIERS[i.dataset.tier ?? ''],
-          reward: h?.querySelector('[title^="Wallet"]')?.getAttribute('title')?.replace(/^Wallet:\s*/, '+') ?? undefined,
-          kind: i.dataset.kind,
-          series: i.dataset.name ?? h?.firstChild?.textContent?.trim() ?? '',
-          level: Number(i.dataset.position) || 1,
-        };
-      })
-      .sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
+    const items = parseAchievements(doc);
+    const done = items.filter((a) => a.done).sort((a, b) => (b.date ?? 0) - (a.date ?? 0));
     return { done, total: items.length };
   })().catch(() => undefined);
   memo.set(login, p);
   return p;
 }
 
-function ago(t: number) {
+export function ago(t: number) {
   const days = Math.floor((Date.now() - t) / DAY);
   if (days < 1) return 'today';
   if (days === 1) return 'yesterday';
@@ -59,7 +80,7 @@ function ago(t: number) {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
+export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
@@ -71,7 +92,7 @@ const VIEW_KEY = 'ir-ach-view';
 const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
 
 const PIN_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
 
 /** Pinning, when the card is yours: which names are pinned and how to toggle one. */
 type Pins = { names: string[]; toggle?: (name: string) => void };
@@ -99,11 +120,11 @@ function row(a: Ach) {
     const img = el('img');
     img.src = a.img;
     img.alt = '';
-    img.loading = 'lazy';
     badge.append(img);
   }
   const text = el('div', 'ir-ach-text');
-  const name = el('div', 'ir-ach-name', a.name);
+  const name = el('div', 'ir-ach-name');
+  name.append(el('span', 'ir-ach-nametext', a.name));
   if (a.tier) name.append(el('span', `ir-tier dot ${a.tier}`));
   text.append(name, el('div', 'ir-ach-desc', a.desc));
   const side = el('div', 'ir-ach-side');
@@ -112,14 +133,14 @@ function row(a: Ach) {
     d.title = new Date(a.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     side.append(d);
   }
-  if (a.reward) side.append(el('span', 'ir-ach-reward', a.reward));
+  if (a.wallet) side.append(el('span', 'ir-ach-reward', `+${a.wallet}`)); // titles: on the full page
   r.title = a.desc;
   r.append(badge, text, side);
   if (pins.toggle) r.append(pinButton(a));
   return r;
 }
 
-/** The pinned achievements, as two larger cards. */
+/** The pinned achievements, as larger cards one above the other, with their description. */
 function pinnedCards(done: Ach[]) {
   const box = el('div', 'ir-ach-pinned');
   for (const name of pins.names) {
@@ -135,9 +156,11 @@ function pinnedCards(done: Ach[]) {
       badge.append(img);
     }
     const text = el('div', 'ir-ach-text');
-    const nm = el('div', 'ir-ach-name', a.name);
+    const nm = el('div', 'ir-ach-name');
+    nm.append(el('span', 'ir-ach-nametext', a.name));
     if (a.tier) nm.append(el('span', `ir-tier dot ${a.tier}`));
-    text.append(nm, el('div', 'ir-ach-desc', a.date ? ago(a.date) : a.desc));
+    text.append(nm, el('div', 'ir-ach-desc', a.desc));
+    if (a.date) text.append(el('div', 'ir-ach-when', [ago(a.date), a.wallet && `+${a.wallet}`].filter(Boolean).join(' · ')));
     card.append(badge, text);
     if (pins.toggle) card.append(pinButton(a));
     box.append(card);
@@ -284,7 +307,9 @@ export async function reworkAchievements(login: string | undefined) {
   if (title?.firstChild?.nodeType === Node.TEXT_NODE) title.firstChild.textContent = 'Achievements ';
   const mine = login === myLogin();
   const [data, saved] = await Promise.all([load(login), fetchPins(login)]);
-  if (!data?.done.length) return;
+  // Loaded (or not): intra's tiles, hidden while we fetched, go or come back.
+  const ready = () => (box.dataset.irAch = 'ready');
+  if (!data?.done.length) return ready();
   pins = { names: (saved ?? []).filter((n) => data.done.some((a) => a.name === n)) };
   // Your own card: pin up to two (a third replaces the older one); saved on our server.
   if (mine && saved !== undefined) {
@@ -304,4 +329,5 @@ export async function reworkAchievements(login: string | undefined) {
     };
   }
   const refresh = render(box, data);
+  ready();
 }
