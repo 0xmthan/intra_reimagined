@@ -5,6 +5,7 @@
 // id at every browser start, and a dismissal is stored with the id it was made in. (Content
 // scripts can't count on reading storage.session in Firefox, so this uses storage.local.)
 // The popup lives in a shadow root so intra's CSS (and ours) can't reach it.
+import { setHTML } from './html';
 
 interface StorageArea {
   get(keys: string[]): Promise<Record<string, unknown>>;
@@ -108,7 +109,7 @@ export function ask(p: Prompt): Promise<boolean> {
   return new Promise((resolve) => {
     const host = document.createElement('intra-reimagined-popup');
     const root = host.attachShadow({ mode: 'closed' });
-    root.innerHTML = `<style>${CSS}</style>
+    setHTML(root, `<style>${CSS}</style>
       <div class="backdrop">
         <div class="card" role="dialog" aria-modal="true" aria-labelledby="t" aria-describedby="d">
           <div class="badge">${PLANET}</div>
@@ -120,7 +121,7 @@ export function ask(p: Prompt): Promise<boolean> {
           </div>
           ${p.note ? `<div class="note">${esc(p.note)}</div>` : ''}
         </div>
-      </div>`;
+      </div>`);
     const done = (v: boolean) => {
       document.removeEventListener('keydown', onKey, true);
       host.remove();
@@ -163,8 +164,8 @@ export function loginPill(onClick: () => void) {
   if (document.querySelector('intra-reimagined-login')) return;
   const host = document.createElement('intra-reimagined-login');
   const root = host.attachShadow({ mode: 'closed' });
-  root.innerHTML = `<style>${PILL_CSS}</style>
-    <button aria-label="Log in to Intra Reimagined with 42" title="Log in to Intra Reimagined">${PLANET}<span>Log in with 42</span></button>`;
+  setHTML(root, `<style>${PILL_CSS}</style>
+    <button aria-label="Log in to Intra Reimagined with 42" title="Log in to Intra Reimagined">${PLANET}<span>Log in with 42</span></button>`);
   root.querySelector('button')!.addEventListener('click', onClick);
   document.documentElement.appendChild(host);
 }
