@@ -6,6 +6,7 @@
 //                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
+//   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
 //   GET /install, /updates.json, /xpi/<file>  →  self-hosted extension updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
@@ -19,6 +20,7 @@ import { Db, type Piscine } from './db.ts';
 import { EvalService } from './evals.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
+import { Auth } from './auth.ts';
 
 const envFile = new URL('.env', import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -26,6 +28,11 @@ if (existsSync(envFile)) process.loadEnvFile(envFile);
 const { FT_UID, FT_SECRET } = process.env;
 if (!FT_UID || !FT_SECRET) {
   console.error('Missing FT_UID / FT_SECRET (create an app at https://profile.intra.42.fr/oauth/applications/new).');
+  process.exit(1);
+}
+const { AUTH_SECRET, PUBLIC_URL } = process.env;
+if (!AUTH_SECRET || AUTH_SECRET.length < 32 || !PUBLIC_URL) {
+  console.error('Missing AUTH_SECRET (32+ random chars, e.g. `openssl rand -hex 32`) / PUBLIC_URL (e.g. https://intra.mthan.dev).');
   process.exit(1);
 }
 const PORT = Number(process.env.PORT) || 8787;
@@ -39,7 +46,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://profile.intra.4
 const DAY = 86_400_000;
 const api = new FtApi(FT_UID, FT_SECRET);
 const piscineCache = new TtlCache<Piscine | null>(5000); // hot logins, in front of Postgres
-const limiter = new RateLimiter(60, 60_000); // per client IP: 60 requests / minute
+const limiter = new RateLimiter(60, 60_000); // per signed-in login: 60 requests / minute
+const authLimiter = new RateLimiter(20, 60_000); // per client IP, for the login routes
+const auth = new Auth(FT_UID, FT_SECRET, AUTH_SECRET, PUBLIC_URL);
 
 const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefined;
 if (db) await db.init();
@@ -105,7 +114,11 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' });
+    res.writeHead(204, {
+      'Access-Control-Allow-Methods': 'GET',
+      'Access-Control-Allow-Headers': 'Authorization',
+      'Access-Control-Max-Age': '86400',
+    });
     return res.end();
   }
   if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
@@ -119,16 +132,23 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  if (url.pathname.startsWith('/auth/')) {
+    if (!authLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    if (await auth.handle(url, res)) return;
+  }
+
   const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);
   const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations)$/i);
   if (!m && !(pm && MONTHS.includes(pm[3]))) return send(res, 404, { error: 'not found' });
 
-  if (!limiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+  const me = auth.verify(req);
+  if (!me) return send(res, 401, { error: 'login with 42 required' });
+  if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
 
   if (pm) {
     try {
       const list = await piscines.get(Number(pm[1]), pm[2], pm[3]);
-      return send(res, 200, list, { 'Cache-Control': 'public, max-age=3600' });
+      return send(res, 200, list, { 'Cache-Control': 'private, max-age=3600' });
     } catch (e) {
       console.error(e);
       return send(res, 502, { error: '42 API unavailable' });
@@ -142,12 +162,12 @@ const server = createServer(async (req, res) => {
       const piscine = await getPiscine(login);
       if (!piscine) return send(res, 404, { error: 'unknown login' });
       // Let the browser cache it too: a piscine date doesn't change.
-      return send(res, 200, piscine, { 'Cache-Control': 'public, max-age=86400' });
+      return send(res, 200, piscine, { 'Cache-Control': 'private, max-age=86400' });
     }
     const { partners: _, ...stats } = await evals.get(login); // the partner table stays on the server
     const viewer = url.searchParams.get('with')?.toLowerCase();
     const together = viewer && viewer !== login && /^[a-z0-9-]{1,32}$/.test(viewer) ? await evals.together(login, viewer) : undefined;
-    send(res, 200, { ...stats, together }, { 'Cache-Control': 'public, max-age=600' });
+    send(res, 200, { ...stats, together }, { 'Cache-Control': 'private, max-age=600' });
   } catch (e) {
     if (e instanceof FtApiError && e.status === 404) return send(res, 404, { error: 'unknown login' });
     console.error(e);

@@ -1,4 +1,4 @@
-/** Fixed-window limiter per key (client IP), so one client can't burn the app's 42 API quota. */
+/** Fixed-window limiter per key (login or client IP), so one client can't burn the app's 42 API quota. */
 export class RateLimiter {
   #windows = new Map<string, { count: number; resetAt: number }>();
 
