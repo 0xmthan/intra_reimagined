@@ -42,6 +42,18 @@ export interface EvalStats {
   refreshedAt: Date;
 }
 
+/** One patronage (family.ts): `patron` patrons `child`. */
+export interface Patronage {
+  id: number;
+  child: string;
+  patron: string;
+  childImage: string | null;
+  patronImage: string | null;
+  ongoing: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class Db {
   readonly #sql: postgres.Sql;
 
@@ -86,6 +98,71 @@ export class Db {
         updated_at timestamptz not null default now()
       )`;
     await this.#sql`create index if not exists banners_hash on banners (hash)`;
+    // Every patronage on 42 (family.ts keeps it in sync and in memory).
+    await this.#sql`
+      create table if not exists patronages (
+        id           integer primary key,
+        child        text not null,
+        patron       text not null,
+        child_image  text,
+        patron_image text,
+        ongoing      boolean not null,
+        created_at   timestamptz not null,
+        updated_at   timestamptz not null
+      )`;
+    // Logins per primary campus (campus.ts), for a campus's patronage families.
+    await this.#sql`
+      create table if not exists campus_members (
+        campus_id    integer primary key,
+        logins       jsonb not null,
+        refreshed_at timestamptz not null default now()
+      )`;
+  }
+
+  async getCampusMembers(campusId: number): Promise<{ logins: string[]; refreshedAt: Date } | undefined> {
+    const [row] = await this.#sql<{ logins: string[]; refreshedAt: Date }[]>`
+      select logins, refreshed_at as "refreshedAt" from campus_members where campus_id = ${campusId}`;
+    return row;
+  }
+
+  async saveCampusMembers(campusId: number, logins: string[]) {
+    await this.#sql`
+      insert into campus_members (campus_id, logins) values (${campusId}, ${this.#sql.json(logins)})
+      on conflict (campus_id) do update set logins = excluded.logins, refreshed_at = now()`;
+  }
+
+  async getPatronages(): Promise<Patronage[]> {
+    return this.#sql<Patronage[]>`
+      select id, child, patron, child_image as "childImage", patron_image as "patronImage", ongoing,
+        created_at as "createdAt", updated_at as "updatedAt" from patronages`;
+  }
+
+  async upsertPatronages(rows: Patronage[], sql: postgres.Sql | postgres.TransactionSql = this.#sql) {
+    for (let i = 0; i < rows.length; i += 1000) {
+      const chunk = rows.slice(i, i + 1000).map((r) => ({
+        id: r.id,
+        child: r.child,
+        patron: r.patron,
+        child_image: r.childImage,
+        patron_image: r.patronImage,
+        ongoing: r.ongoing,
+        created_at: r.createdAt,
+        updated_at: r.updatedAt,
+      }));
+      await sql`
+        insert into patronages ${sql(chunk)}
+        on conflict (id) do update set child = excluded.child, patron = excluded.patron,
+          child_image = excluded.child_image, patron_image = excluded.patron_image, ongoing = excluded.ongoing,
+          created_at = excluded.created_at, updated_at = excluded.updated_at`;
+    }
+  }
+
+  /** Swaps in a complete list (rows gone from 42 go here too), in one transaction. */
+  async replacePatronages(rows: Patronage[]) {
+    await this.#sql.begin(async (tx) => {
+      await tx`delete from patronages`;
+      await this.upsertPatronages(rows, tx);
+    });
   }
 
   async getBannerOf(login: string): Promise<{ hash: string; type: string } | undefined> {
