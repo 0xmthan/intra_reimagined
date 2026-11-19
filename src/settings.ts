@@ -3,6 +3,7 @@
 import { getSettings, onSettingsChange, setSetting, type Settings } from './store';
 import { setHTML } from './html';
 import { myLogin } from './me';
+import { installUrl, updateInfo } from './update';
 
 type BoolSetting = keyof Settings;
 
@@ -98,6 +99,20 @@ function addSettingsSection() {
       ).join('')}
     </div>`);
   pane.appendChild(section);
+
+  // Chrome copies don't update themselves: point at the new version next to the current one.
+  updateInfo().then((u) => {
+    const tag = section.querySelector('.ir-setting-version');
+    if (!u?.latest || !tag) return;
+    const link = document.createElement('a');
+    link.href = installUrl();
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.className = 'ir-setting-update';
+    link.textContent = `update to v${u.latest}`;
+    tag.append(' · ', link);
+  });
+
 
   const inputs = [...section.querySelectorAll<HTMLInputElement>('input[data-key]')];
   const sync_ = (s: Settings) => inputs.forEach((i) => (i.checked = s[i.dataset.key as BoolSetting]));

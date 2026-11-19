@@ -72,6 +72,10 @@ html.ir-logo-pinned .main-navbar {
   font-size: 13px;
 }
 
+.ir-setting-update {
+  color: #00babc;
+}
+
 .ir-setting-version {
   margin-left: 6px;
   color: #999;

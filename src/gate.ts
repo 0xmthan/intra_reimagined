@@ -36,7 +36,7 @@ export async function dismiss(key: string) {
 }
 
 /** The extension's mark (public/icon.svg without its square): white planet, ring cut out in teal. */
-const PLANET = `<svg viewBox="0 0 128 128" aria-hidden="true"><g transform="translate(64 64) scale(.88) rotate(-22) translate(-64 -64)" fill="none" stroke-linecap="round">
+export const PLANET = `<svg viewBox="0 0 128 128" aria-hidden="true"><g transform="translate(64 64) scale(.88) rotate(-22) translate(-64 -64)" fill="none" stroke-linecap="round">
   <path d="M12 64A52 14 0 0 1 116 64" stroke="#fff" stroke-width="7"/>
   <circle cx="64" cy="64" r="27" fill="#fff" stroke="none"/>
   <path d="M116 64A52 14 0 0 1 12 64" stroke="#00babc" stroke-width="15"/>
