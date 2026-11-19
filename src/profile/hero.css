@@ -278,9 +278,9 @@ a.coal-line:hover .coal-flag {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  background: var(--badge-bg, #111) center / cover;
-  color: #000;
-  -webkit-text-stroke: 1px #fff;
+  background: var(--badge-bg, none) center / cover, var(--badge-fill, #111);
+  color: var(--badge-color, #fff);
+  -webkit-text-stroke: var(--badge-stroke, 0);
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
@@ -381,6 +381,22 @@ a.coal-line:hover .coal-flag {
 
 .chip.off {
   color: var(--muted);
+}
+
+/* The cursus chip shows the chosen cursus as text; the real select lies invisibly on top, so the
+   chip is only as wide as what it shows (a select is as wide as its longest option). */
+.pick-cursus {
+  position: relative;
+}
+.pick-cursus select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+}
+
+.chip .grade-sep {
+  color: var(--faint); /* spaced by the chip's own gap */
 }
 
 .chip select {

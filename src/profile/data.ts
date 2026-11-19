@@ -17,7 +17,8 @@ export interface HeroData {
   name: string;
   title: string;
   titles: TitleOption[];
-  badge?: { text: string; background?: string };
+  /** Custom badges next to the name (LEADER, TUTOR, ...), each with intra's own look. */
+  badges: Badge[];
   avatar?: string;
   cover?: string;
   coalition?: { name: string; color: string; href?: string; score?: number; rank?: number; icon?: string };
@@ -41,6 +42,7 @@ export interface Goals {
   next_milestone?: string; // dd.mm.yyyy
   next_milestone_days?: number;
   cc_eta?: string; // dd.mm.yyyy
+  cc_validated?: boolean; // common core done (e.g. Transcender): no ETA, no milestones
   cc_eta_days?: string;
   // Old blackhole system (e.g. accounts blackholed before pace): days left, negative once absorbed.
   singularity?: number;
@@ -69,6 +71,35 @@ const txt = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g,
 const bgUrl = (el: Element | null | undefined) =>
   el ? getComputedStyle(el).backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1] : undefined;
 
+export interface Badge {
+  text: string;
+  background?: string; // image url
+  fill?: string; // background color
+  color?: string;
+  stroke?: string; // -webkit-text-stroke
+}
+
+/**
+ * A badge's look comes from inline styles (on the badge, and on a span inside it for text color
+ * and outline). Read those, not computed styles: dark mode recolors grey text and backgrounds.
+ */
+function readBadge(el: HTMLElement): Badge {
+  const parse = (s: string | null | undefined) => {
+    const t = document.createElement('span');
+    t.setAttribute('style', s ?? '');
+    return t.style;
+  };
+  const outer = parse(el.getAttribute('style'));
+  const inner = parse(el.querySelector('[style]')?.getAttribute('style'));
+  return {
+    text: txt(el),
+    background: bgUrl(el),
+    fill: outer.backgroundColor || undefined,
+    color: inner.color || outer.color || undefined,
+    stroke: inner.webkitTextStroke || outer.webkitTextStroke || undefined,
+  };
+}
+
 export function readHero(): HeroData | undefined {
   const q = <T extends Element = Element>(s: string, root: ParentNode = document) => root.querySelector<T>(s);
   const qa = <T extends Element = Element>(s: string, root: ParentNode = document) => [...root.querySelectorAll<T>(s)];
@@ -91,8 +122,7 @@ export function readHero(): HeroData | undefined {
     el: a,
   }));
 
-  const badgeEl = q<HTMLElement>('.profile-name .user-badge');
-  const badge = badgeEl ? { text: txt(badgeEl), background: bgUrl(badgeEl) } : undefined;
+  const badges = qa<HTMLElement>('.profile-name .user-badge').map(readBadge).filter((b) => b.text);
 
   // Others' pages show their photo; your own home page only has your navbar avatar.
   const avatar = bgUrl(q('.profile-item .user-image')) ?? (own ? bgUrl(q('.user-profile-picture')) : undefined);
@@ -130,7 +160,7 @@ export function readHero(): HeroData | undefined {
     name,
     title: titles.find((t) => t.active)?.label || txt(loginEl) || login,
     titles,
-    badge,
+    badges,
     avatar,
     cover: bgUrl(q('.profile-item .profile-banner')),
     coalition,

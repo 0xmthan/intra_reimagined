@@ -5,7 +5,7 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type EvalStats, type Goals, type HeroData, type Week } from './data';
+import { fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
@@ -122,6 +122,16 @@ export function mountHero() {
     state.data.cursus.el.value = sel.value;
     state.data.cursus.el.dispatchEvent(new Event('change', { bubbles: true })); // followSelect picks it up
   });
+}
+
+function badgeHtml(b: Badge) {
+  const vars = [
+    b.background && `--badge-bg:url('${b.background}')`,
+    b.fill && `--badge-fill:${b.fill}`,
+    b.color && `--badge-color:${b.color}`,
+    b.stroke && `--badge-stroke:${b.stroke}`,
+  ].filter(Boolean);
+  return `<span class="badge" style="${esc(vars.join(';'))}">${esc(b.text)}</span>`;
 }
 
 /** Profile picture, big and centered (like Instagram). Click it to zoom in more (and back);
@@ -289,6 +299,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   // Pace system: a milestone deadline in the past means it was missed (blackholed while on probation).
   const missed = !frozen && daysLeft !== undefined && daysLeft < 0;
   const blackholed = absorbed || (missed && blackhole); // no common core ahead: no ETA/timeline
+  const ccDone = !!goals?.cc_validated; // common core already validated: nothing left to time
   const danger = !frozen && (blackhole || (daysLeft !== undefined && daysLeft <= 14));
   const current = pace ? paceSegments(pace).find((s) => s.level === pace.milestone) : undefined;
   const used = current ? Math.min(1, Math.max(0, (Date.now() - current.from) / (current.to - current.from))) : undefined;
@@ -305,6 +316,8 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const rank = c?.rank;
   const coalHref = d.coalition && d.coalition.name === coalName ? d.coalition.href : undefined;
   const ev = evals && evals !== 'auth' ? evals : undefined;
+  // Grade (Cadet, Pisciner, ...) belongs to the cursus, so it sits in the cursus chip.
+  const grade = d.grade ? `<span class="grade-sep">·</span>${esc(d.grade)}` : '';
   const passed = ev ? ev.total - ev.failed : 0;
   const failRate = ev?.total ? Math.round((ev.failed / ev.total) * 100) : 0;
   const etaDays = goals?.cc_eta ? Math.ceil(((parseDmy(goals.cc_eta) ?? 0) - Date.now()) / DAY_MS) : undefined;
@@ -330,7 +343,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           </${coalHref ? 'a' : 'div'}>` : ''}
           <div class="name-row">
             <h1 class="name">${esc(d.name)}</h1>
-            ${d.badge ? `<span class="badge" style="${d.badge.background ? `--badge-bg:url('${esc(d.badge.background)}')` : ''}">${esc(d.badge.text)}</span>` : ''}
+            ${d.badges.map(badgeHtml).join('')}
           </div>
           <div class="title-wrap">
             ${d.own && d.titles.length
@@ -339,15 +352,14 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           </div>
           <div class="chips">
             <button class="chip btn" data-act="copy" data-tip="Copy login">${icon('copy')} ${esc(d.login)}</button>
-            ${d.grade ? `<span class="chip">${esc(d.grade)}</span>` : ''}
             ${piscine?.campusId != null
               ? `<button class="chip btn" data-act="piscine" data-tip="Piscine">${icon('wave')} ${esc(piscine.label)}</button>`
               : piscine || piscineLabel || d.piscine
                 ? `<span class="chip" data-tip="Piscine">${icon('wave')} ${esc(piscine?.label ?? piscineLabel ?? d.piscine!.label)}</span>`
                 : ''}
             ${d.cursus.options.length > 1
-              ? `<label class="chip btn"><select data-cursus>${d.cursus.options.map((o) => `<option value="${esc(o.value)}" ${o.value === d.cursus.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select> ▾</label>`
-              : `<span class="chip">${esc(d.cursus.value)}</span>`}
+              ? `<label class="chip btn pick-cursus" data-tip="Cursus and grade">${esc(d.cursus.options.find((o) => o.value === d.cursus.value)?.label ?? d.cursus.value)}${grade} ▾<select data-cursus aria-label="Cursus">${d.cursus.options.map((o) => `<option value="${esc(o.value)}" ${o.value === d.cursus.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`
+              : `<span class="chip" data-tip="Cursus and grade">${esc(d.cursus.value)}${grade}</span>`}
             <span class="chip ${d.location.available ? '' : 'off'}">${icon('seat')} ${esc(d.location.text)}</span>
             ${d.campus ? `<span class="chip">${icon('pin')} ${esc(d.campus)}</span>` : ''}
             ${d.email ? `<a class="chip btn" href="mailto:${esc(d.email)}">${icon('mail')} ${esc(d.email)}</a>` : ''}
@@ -399,7 +411,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}">
-          <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>
+          <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : ccDone && daysLeft === undefined ? 'Common core' : 'Next deadline'}</h3>
           ${missed ? `
             <div class="big" data-tip="${-daysLeft!} days">${spanHtml(Date.now() + daysLeft! * DAY_MS, Date.now())}<small> ago</small></div>
             <div class="sub">Missed ${pace ? `Milestone ${pace.milestone}` : 'deadline'} · ${esc(goals?.next_milestone ?? '')}</div>
@@ -413,6 +425,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             <div class="big">${daysLeft}<small> days</small></div>
             <div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>
             ${used !== undefined ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
+          ` : ccDone ? `
+            <div class="big">Done</div>
+            <div class="sub">Common core validated</div>
           ` : goalsLoaded ? `
             <div class="big muted">—</div>
             <div class="sub">No deadline in ${esc(d.cursus.options.find((o) => o.value === d.cursus.value)?.label ?? d.cursus.value)}</div>
@@ -420,10 +435,10 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         </div>
       </section>
 
-      ${!blackholed && (goals?.cc_eta || pace) ? `<section class="timeline">
+      ${!blackholed && !ccDone && (goals?.cc_eta || pace?.eta_end_of_cursus) ? `<section class="timeline">
         <div class="tl-eta">
           <span class="label">Common Core ETA</span>
-          <span class="date">${esc(pace ? fmtIsoDate(pace.eta_end_of_cursus) : goals!.cc_eta!)}</span>
+          <span class="date">${esc(pace?.eta_end_of_cursus ? fmtIsoDate(pace.eta_end_of_cursus) : (goals?.cc_eta ?? ''))}</span>
           <span class="sub">${etaDays !== undefined ? `${etaDays} days` : ''}${pace?.end_of_cursus_max_deadline ? ` · max <b class="max" data-tip="Pace 24 max deadline · ${Math.ceil((new Date(pace.end_of_cursus_max_deadline).getTime() - Date.now()) / DAY_MS)} days">${fmtIsoDate(pace.end_of_cursus_max_deadline)}</b>` : ''}</span>
         </div>
         <div class="tl-scroll"><div class="tl-track">${pace ? paceTrackHtml(pace, { yearMarks: true }) : '<div class="skeleton tall"></div>'}</div></div>

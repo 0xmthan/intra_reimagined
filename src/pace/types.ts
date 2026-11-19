@@ -10,7 +10,7 @@ export interface PaceProfile {
   milestone: number;
   deadline: string;
   cursus_begin_date: string;
-  eta_end_of_cursus: string;
+  eta_end_of_cursus: string | null; // null once the common core is validated
   end_of_cursus_max_deadline?: string | null;
   milestones: PaceMilestone[];
 }

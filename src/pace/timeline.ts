@@ -120,7 +120,7 @@ function writeCache(login: string, data: PaceProfile) {
 // ---------- rendering ----------
 
 const day = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
-const fmt = (iso: string) => iso.split('-').reverse().join('.');
+const fmt = (iso: string | null | undefined) => (iso ? iso.split('-').reverse().join('.') : '');
 const fmtTime = (t: number) => {
   const d = new Date(t);
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
@@ -169,7 +169,7 @@ export function paceSegments(pace: PaceProfile): PaceSegment[] {
 export function paceTrackHtml(pace: PaceProfile, { yearMarks = false } = {}) {
   const start = day(pace.cursus_begin_date);
   const segments = paceSegments(pace);
-  const end = Math.max(day(pace.eta_end_of_cursus), segments.at(-1)?.to ?? start);
+  const end = Math.max(pace.eta_end_of_cursus ? day(pace.eta_end_of_cursus) : 0, segments.at(-1)?.to ?? start);
   const pct = (t: number) => Math.min(100, Math.max(0, ((t - start) / (end - start)) * 100));
   const long = (end - start) / DAY_MS > 600;
 
@@ -207,7 +207,7 @@ export function bindPaceTooltips(root: ParentNode) {
   }
 }
 
-export const fmtIsoDate = (iso: string) => fmt(iso);
+export const fmtIsoDate = (iso: string | null | undefined) => fmt(iso);
 
 function render(banner: Element, pace: PaceProfile) {
 
