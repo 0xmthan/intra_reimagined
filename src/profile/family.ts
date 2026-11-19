@@ -340,8 +340,8 @@ const CSS = `
 :host([fill]) .frame { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 :host([fill]) .viewport { flex: 1; max-height: none; }
 .fade { position: absolute; pointer-events: none; opacity: 0; transition: opacity 160ms ease; z-index: 2; }
-.fade.up { top: 0; left: 0; right: 0; height: 36px; background: linear-gradient(var(--tree-bg), transparent); }
-.fade.down { bottom: 0; left: 0; right: 0; height: 36px; background: linear-gradient(transparent, var(--tree-bg)); }
+.fade.up { top: 0; left: 0; right: 0; height: 36px; background: linear-gradient(var(--tree-bg-up, var(--tree-bg)), transparent); }
+.fade.down { bottom: 0; left: 0; right: 0; height: 36px; background: linear-gradient(transparent, var(--tree-bg-down, var(--tree-bg))); }
 .fade.left { top: 0; bottom: 0; left: 0; width: 36px; background: linear-gradient(to right, var(--tree-bg), transparent); }
 .fade.right { top: 0; bottom: 0; right: 0; width: 36px; background: linear-gradient(to left, var(--tree-bg), transparent); }
 .frame.more-up .fade.up, .frame.more-down .fade.down, .frame.more-left .fade.left, .frame.more-right .fade.right { opacity: 1; }

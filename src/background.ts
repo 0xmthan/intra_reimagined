@@ -44,7 +44,7 @@ api.alarms.onAlarm.addListener((alarm) => alarm.name === ALARM && check());
 api.runtime.onUpdateAvailable.addListener(() => api.runtime.reload());
 
 // ---------- framing intra pages in our windows (clusters.ts: Clusters, Manage slots) ----------
-// meta's clusters map and the slots page refuse to be framed by other pages (X-Frame-Options).
+// meta's clusters map, the slots page and achievements pages refuse to be framed by other pages (X-Frame-Options).
 // When a tab opens one of our windows it asks here, and that tab alone may frame them. (A static
 // rule keyed on the initiator doesn't work: the frame is made by our content script, so Firefox
 // sees the extension, not intra, as its initiator.)
@@ -72,7 +72,7 @@ function allowFrames(tabId: number) {
           ],
         },
         condition: {
-          regexFilter: '^https://(meta\\.intra\\.42\\.fr/clusters|profile\\.intra\\.42\\.fr/slots)',
+          regexFilter: '^https://(meta\\.intra\\.42\\.fr/clusters|profile\\.intra\\.42\\.fr/(slots|users/[a-z0-9-]+/achievements))',
           resourceTypes: ['sub_frame'],
           tabIds: [tabId],
         },

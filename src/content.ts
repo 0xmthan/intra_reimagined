@@ -23,10 +23,11 @@ import { layoutUserPage } from './profile/user-page';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
-import { isOwnProfilePath, rememberLogin, rememberedLogin } from './me';
+import { isOwnProfilePath, myLogin, rememberLogin, rememberedLogin } from './me';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
 import { interceptSlotLinks, reworkSlotsPage } from './slots';
 import { initUserTooltips } from './user-tooltip';
+import { reworkAchievements } from './profile/achievements';
 import { initNews } from './news';
 import { NEEDS_LOGIN, connect, consumeAuthRedirect, getToken, loginHint, setLoginHint } from './auth';
 import { ask, dismiss, dismissed, loginPill } from './gate';
@@ -106,6 +107,7 @@ async function main() {
   if (location.origin === V2_ORIGIN && isProfilePage()) {
     mountHero();
     layoutUserPage(); // others' /users/<login>: the home page's card layout
+    void reworkAchievements(location.pathname.match(/^\/users\/([a-z0-9-]+)\/?$/i)?.[1]);
     const pane = document.querySelector('#patronages');
     if (pane) renderFamilyTree(pane); // no-op if the layout already made it a card
   }
@@ -120,6 +122,7 @@ async function main() {
     layoutHome(); // after the cards above are merged and renamed
     reworkLogtime();
     reworkAgenda();
+    void reworkAchievements(myLogin());
   }
   notifyUpdate();
 }

@@ -20,6 +20,19 @@
   width: auto;
   margin: 0;
 }
+/* Hover: a short glitch like 42's own logo (keycloak's login page): the mark jumps and blurs, then
+   splits into purple, green and pink copies, then settles. Each step holds ~170ms. */
+#ir-logo:hover img { animation: ir-logo-glitch 0.52s steps(1, end); }
+@keyframes ir-logo-glitch {
+  0% { transform: translate(1.5px, -1px) skewX(-6deg); filter: blur(0.7px); }
+  33% {
+    transform: translateX(-0.5px);
+    filter: blur(0.35px) drop-shadow(-2.5px 0 #6b54ff) drop-shadow(2.5px 0 #ff4ea7) drop-shadow(0 1.5px #37cd7c);
+    opacity: 0.9;
+  }
+  66%, 100% { transform: none; filter: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { #ir-logo:hover img { animation: none; } }
 
 /* The logo's old slot is empty now; start the navbar after the sidebar column instead, so it
    can't slide over the sidebar icons when the page trackpad-bounces. */
@@ -228,7 +241,7 @@ html.ir-no-topbar .main-navbar {
 /* The sidebar sits under the page content (10 vs 20); lift it so its menus and labels can open
    over the page. It never overlaps the content otherwise. */
 html.ir-no-topbar .page-sidebar {
-  z-index: 30;
+  z-index: 1000; /* over the page (the profile header stacks itself high), under popups (1040+) */
   /* Its box is wider than what it shows (it reserves room for a second menu, empty on most
      pages), so let clicks through the empty part and keep its actual contents clickable. */
   pointer-events: none;
@@ -651,11 +664,15 @@ html.ir-embed .page-content .container-item {
   margin: 0 !important;
   padding: 18px 20px !important;
   overflow: hidden !important;
-  border: 1px solid var(--g-line) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 18px !important;
-  background: rgba(20, 23, 29, 0.85) !important;
-  box-shadow: none !important;
+  /* Glass, like the header's cards: lit from the top, the page showing through. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
+/* The dark theme paints boxes a solid grey (dark.css; its :is() list makes that rule very specific):
+   keep it from showing under the glass. */
+html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { background-color: transparent !important; }
 .ir-home-grid > [data-ir-card] > .container-inner-item > :not(h4) {
   flex: 1 1 auto;
   min-height: 0;
@@ -1300,3 +1317,199 @@ html.ir-slots-page.ir-embed .page-content .container-item:has(#calendar) { margi
 
 /* intra's user hover tooltip: replaced by ours (user-tooltip.ts). */
 .tooltip-content[data-tooltip] { display: none !important; }
+
+/* The family tree on a glass card: its edge fades and avatar rings use the color the glass comes out
+   as over the page (top of the card a little lighter than the bottom). */
+.ir-home-grid ir-family-tree { --tree-bg: #15171b; --tree-bg-up: #17191d; --tree-bg-down: #121418; }
+
+/* Popups' backdrop (event viewer and other intra modals): a light dim and blur like our Clusters
+   window, not a near-solid sheet (the dark theme tags it as a box and intra makes it 95% opaque). */
+html.ir-dark .modal-backdrop.in,
+html.ir-dark .modal-backdrop.in.ir-dk-bg {
+  background-color: rgb(5, 6, 9) !important;
+  opacity: 0.55 !important;
+}
+html.ir-dark .modal.in:has(.modal-dialog) { backdrop-filter: blur(4px); }
+
+/* ---------- main sidebar: themed in place (same items, same spots) ---------- */
+html.ir-dark .main-left-navbar { background: linear-gradient(180deg, #13161c, #0e1015) !important; }
+html.ir-dark #ir-logo { background: #13161c !important; }
+html.ir-dark .main-left-navbar { box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06) !important; }
+html.ir-dark #ir-logo { box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06) !important; }
+/* Each item: the icon on a soft rounded tile, like the tools at the bottom. */
+html.ir-dark .main-left-navbar > ._ > li > a {
+  position: relative;
+  color: #8b93a7 !important;
+  background: none !important;
+  border: 0 !important;
+  transition: color 0.15s;
+}
+html.ir-dark .main-left-navbar > ._ > li > a::before {
+  content: '';
+  position: absolute;
+  inset: 14px 14px;
+  border-radius: 14px;
+  background: transparent;
+  transition: background 0.15s, box-shadow 0.15s;
+  z-index: -1;
+}
+html.ir-dark .main-left-navbar > ._ > li > a > :not(.visible-overlay) { position: relative; z-index: 1; }
+html.ir-dark .main-left-navbar > ._ > li > a:hover { color: #fff !important; text-decoration: none; }
+html.ir-dark .main-left-navbar > ._ > li > a:hover::before { background: rgba(255, 255, 255, 0.07); }
+/* The page you're on: teal icon on a teal-tinted tile, with a small bar at the edge. */
+html.ir-dark .main-left-navbar > ._ > li > a.active { color: #00babc !important; }
+html.ir-dark .main-left-navbar > ._ > li > a.active::before {
+  background: rgba(0, 186, 188, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(0, 186, 188, 0.22);
+}
+html.ir-dark .main-left-navbar > ._ > li > a.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 28px;
+  bottom: 28px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #00babc;
+}
+/* Hover labels, like the tools' (intra hides its own). */
+html.ir-dark .main-left-navbar > ._ > li > a > .visible-overlay {
+  position: absolute;
+  top: 50%;
+  left: 76px;
+  transform: translateY(-50%);
+  display: none !important;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #1c1f27;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 50;
+}
+html.ir-dark .main-left-navbar > ._ > li > a:hover > .visible-overlay { display: block !important; }
+/* The pinned logo sits over the sidebar's top (which is now lifted to 1000). */
+html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
+
+/* ---------- Achievements card (profile/achievements.ts): progress, then everything earned ---------- */
+.ir-ach { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; gap: 12px; margin-top: 4px; }
+.ir-ach-head { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 4px 10px; }
+.ir-ach-count { font-size: 13px; color: var(--ir-muted, #a1a7b5); }
+.ir-ach-count b { font-size: 22px; font-weight: 600; color: var(--ir-text, #e2e4ea); margin-right: 2px; }
+.ir-ach-pct { grid-column: 3; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
+.ir-ach-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.ir-ach-bar > i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00babc, #3ddc84); }
+.ir-ach-tiers { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 2px; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
+.ir-ach-tiers b { font-weight: 600; color: var(--ir-text, #e2e4ea); }
+.ir-tier { display: inline-flex; align-items: center; gap: 5px; }
+.ir-tier::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--t); box-shadow: 0 0 0 2px color-mix(in srgb, var(--t) 25%, transparent); }
+.ir-tier.bronze { --t: #cd8a4f; }
+.ir-tier.silver { --t: #c4ccd8; }
+.ir-tier.gold { --t: #f5c451; }
+.ir-tier.platinum { --t: #8fe3ff; }
+.ir-tier.dot { margin-left: 7px; vertical-align: 1px; }
+.ir-tier.dot::before { width: 6px; height: 6px; box-shadow: none; }
+.ir-ach-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -8px; padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+.ir-ach-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 7px 8px; margin: 0 -8px; border-radius: 10px; }
+.ir-ach-row:hover { background: rgba(255, 255, 255, 0.04); }
+.ir-ach-badge { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.ir-ach-badge img { width: 44px; height: 44px; object-fit: contain; }
+.ir-ach-text { min-width: 0; }
+.ir-ach-name { font-size: 13.5px; color: var(--ir-text, #e2e4ea); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ir-ach-desc { font-size: 11.5px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ir-ach-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; }
+.ir-ach-reward { color: #f5c451; }
+.ir-ach-listhead { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ir-muted, #a1a7b5); margin-bottom: -4px; }
+/* Rarity: a series is a stack, its top level a card with the cards under it peeking out. */
+.ir-ach-stack { position: relative; margin: 2px 0 12px; }
+.ir-ach-stack.bronze { --t: #cd8a4f; }
+.ir-ach-stack.silver { --t: #c4ccd8; }
+.ir-ach-stack.gold { --t: #f5c451; }
+.ir-ach-stack.platinum { --t: #8fe3ff; }
+.ir-ach-stack:not(.open)::before,
+.ir-ach-stack:not(.open)::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -5px;
+  height: 12px;
+  border-radius: 0 0 12px 12px;
+  background: color-mix(in srgb, var(--t, #8b93a7) 8%, #17191e);
+  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 20%, rgba(255, 255, 255, 0.05));
+  border-top: 0;
+}
+.ir-ach-stack:not(.open)::after { left: 18px; right: 18px; bottom: -10px; opacity: 0.6; z-index: -1; }
+.ir-ach-stack[data-depth='1']::after { display: none; }
+.ir-ach-list .ir-ach-row.ir-ach-stackhead {
+  position: relative;
+  z-index: 1;
+  grid-template-columns: 52px 1fr auto 14px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 28%, rgba(255, 255, 255, 0.06));
+  border-radius: 12px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--t, #8b93a7) 10%, #17191e), #16181d);
+  cursor: pointer;
+}
+.ir-ach-list .ir-ach-row.ir-ach-stackhead:hover { border-color: color-mix(in srgb, var(--t, #8b93a7) 50%, transparent); }
+.ir-ach-levels {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 10.5px;
+  color: var(--ir-muted, #a1a7b5);
+  vertical-align: 1px;
+}
+.ir-ach-chev { width: 7px; height: 7px; border-right: 1.5px solid var(--ir-muted, #a1a7b5); border-bottom: 1.5px solid var(--ir-muted, #a1a7b5); transform: rotate(45deg); margin-bottom: 4px; transition: transform 0.15s; }
+.ir-ach-stack.open .ir-ach-chev { transform: rotate(-135deg); margin: 4px 0 0; }
+.ir-ach-stackbody { margin: 2px 0 0 26px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--t, #8b93a7) 30%, transparent); }
+.ir-ach-stackbody .ir-ach-row { margin-left: 0; }
+/* Pinned achievements: two larger cards above the progress. */
+.ir-ach-pinned { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+.ir-ach-pinned[hidden] { display: none; }
+.ir-ach-pincard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 35%, rgba(255, 255, 255, 0.06));
+  border-radius: 14px;
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--t, #8b93a7) 18%, transparent), transparent 60%), #16181d;
+  min-width: 0;
+}
+.ir-ach-pincard.bronze { --t: #cd8a4f; }
+.ir-ach-pincard.silver { --t: #c4ccd8; }
+.ir-ach-pincard.gold { --t: #f5c451; }
+.ir-ach-pincard.platinum { --t: #8fe3ff; }
+.ir-ach-pincard .ir-ach-badge { width: 56px; height: 56px; border-radius: 14px; }
+.ir-ach-pincard .ir-ach-badge img { width: 48px; height: 48px; }
+.ir-ach-pincard .ir-ach-pin { position: absolute; top: 6px; right: 6px; }
+/* Pin button: shows on hover; filled teal when pinned. */
+.ir-ach-pin {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ir-muted, #a1a7b5);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+.ir-ach-pin svg { width: 15px; height: 15px; }
+.ir-ach-row:hover .ir-ach-pin, .ir-ach-pincard:hover .ir-ach-pin, .ir-ach-pin:focus-visible, .ir-ach-pin[aria-pressed='true'] { opacity: 1; }
+.ir-ach-pin:hover { background: rgba(255, 255, 255, 0.08); color: var(--ir-text, #e2e4ea); }
+.ir-ach-pin[aria-pressed='true'] { color: #00babc; }
+.ir-ach-pin[aria-pressed='true'] svg { fill: currentColor; }
+.ir-ach-row:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px; }
+.ir-ach-list .ir-ach-row.ir-ach-stackhead:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px 14px; }
+.ir-ach-error { font-size: 12px; color: #ff8a8a; }

@@ -316,6 +316,37 @@ export async function saveBanner(file: File | null): Promise<{ url: string | nul
   }
 }
 
+// ---------- pinned achievements (server: /v1/users/:login/pins, /v1/me/pins) ----------
+
+const pinList = (v: unknown) => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string').slice(0, 2) : []);
+
+/** The (up to 2) achievement names `login` pinned; undefined = unknown (no server, signed out). */
+export async function fetchPins(login: string): Promise<string[] | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ pins: unknown }>(`/v1/users/${encodeURIComponent(login)}/pins`, 'no-cache');
+  return j && j !== 'auth' ? pinList(j.pins) : undefined;
+}
+
+/** Saves your pins; returns what the server kept, or an error message. */
+export async function savePins(pins: string[]): Promise<{ pins: string[] } | { error: string }> {
+  const token = await getToken();
+  if (!IR_API || !token) return { error: 'Log in with 42 to pin achievements.' };
+  try {
+    const res = await fetch(`${IR_API}/v1/me/pins`, {
+      method: 'PUT',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pins }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { pins?: unknown; error?: unknown };
+    if (res.status === 401) dropToken();
+    if (!res.ok) return { error: typeof j.error === 'string' ? j.error : `Couldn't save (${res.status}).` };
+    return { pins: pinList(j.pins) };
+  } catch {
+    return { error: "Couldn't reach the server. Try again." };
+  }
+}
+
 /** Official piscine month from 42's API via our server, e.g. "Nov 2025". */
 export interface ApiPiscine {
   label: string; // "Nov 2025"

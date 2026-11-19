@@ -98,6 +98,13 @@ export class Db {
         updated_at timestamptz not null default now()
       )`;
     await this.#sql`create index if not exists banners_hash on banners (hash)`;
+    // Up to two achievements each student pins on their Achievements card (by name).
+    await this.#sql`
+      create table if not exists achievement_pins (
+        login      text primary key,
+        names      jsonb not null,
+        updated_at timestamptz not null default now()
+      )`;
     // Every patronage on 42 (family.ts keeps it in sync and in memory).
     await this.#sql`
       create table if not exists patronages (
@@ -183,6 +190,21 @@ export class Db {
 
   async deleteBanner(login: string) {
     await this.#sql`delete from banners where login = ${login}`;
+  }
+
+  async getPins(login: string): Promise<string[]> {
+    const [row] = await this.#sql<{ names: string[] }[]>`select names from achievement_pins where login = ${login}`;
+    return row?.names ?? [];
+  }
+
+  async savePins(login: string, names: string[]) {
+    if (!names.length) {
+      await this.#sql`delete from achievement_pins where login = ${login}`;
+      return;
+    }
+    await this.#sql`
+      insert into achievement_pins (login, names) values (${login}, ${this.#sql.json(names)})
+      on conflict (login) do update set names = excluded.names, updated_at = now()`;
   }
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {

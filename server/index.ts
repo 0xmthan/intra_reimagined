@@ -10,6 +10,7 @@
 //   GET /health                       →  { ok: true }
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
 //   GET /v1/users/:login/banner, PUT|DELETE /v1/me/banner, GET /banners/<hash>.<ext>  →  custom banners (banners.ts)
+//   GET /v1/users/:login/pins, PUT /v1/me/pins  →  { pins: ["Bonus Hunter 4", …] }: up to 2 pinned achievements
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
@@ -131,9 +132,9 @@ const server = createServer(async (req, res) => {
     });
     return res.end();
   }
-  // Only the banner route takes writes; everything else is read-only.
+  // Only the banner and pins routes take writes; everything else is read-only.
   const write = req.method === 'PUT' || req.method === 'DELETE';
-  if (req.method !== 'GET' && !(write && url.pathname === '/v1/me/banner')) {
+  if (req.method !== 'GET' && !(write && (url.pathname === '/v1/me/banner' || url.pathname === '/v1/me/pins'))) {
     req.resume();
     return send(res, 405, { error: 'method not allowed' });
   }
@@ -209,6 +210,51 @@ const server = createServer(async (req, res) => {
       }
       console.error(e);
       return send(res, 500, { error: 'could not save the banner' });
+    }
+  }
+
+  const pinsOf = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/pins$/i);
+  if (pinsOf || url.pathname === '/v1/me/pins') {
+    const me = auth.verify(req);
+    if (!me) {
+      req.resume();
+      return send(res, 401, { error: 'login with 42 required' });
+    }
+    if (!limiter.take(me)) {
+      req.resume();
+      return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    }
+    if (!db) {
+      req.resume();
+      return send(res, 503, { error: 'pins need the database' });
+    }
+    try {
+      if (pinsOf) return send(res, 200, { pins: await db.getPins(pinsOf[1].toLowerCase()) }, { 'Cache-Control': 'private, no-cache' });
+      if (req.method !== 'PUT') {
+        req.resume();
+        return send(res, 405, { error: 'method not allowed' });
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse((await readBody(req, 2048)).toString('utf8'));
+      } catch {
+        return send(res, 400, { error: 'expected JSON' });
+      }
+      const pins = (body as { pins?: unknown })?.pins;
+      // Names of achievements, as intra shows them: short plain text, at most two, no duplicates.
+      if (!Array.isArray(pins) || pins.length > 2 || !pins.every((p) => typeof p === 'string' && p.trim() && p.length <= 100 && !/[<>]/.test(p))) {
+        return send(res, 400, { error: 'pins: up to 2 achievement names' });
+      }
+      const clean = [...new Set(pins.map((p: string) => p.trim()))];
+      await db.savePins(me, clean);
+      return send(res, 200, { pins: clean });
+    } catch (e) {
+      if (e instanceof BannerError) {
+        res.on('finish', () => req.socket.destroy());
+        return send(res, e.status, { error: e.message }, { Connection: 'close' });
+      }
+      console.error(e);
+      return send(res, 500, { error: 'could not save pins' });
     }
   }
 
