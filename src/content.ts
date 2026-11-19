@@ -16,6 +16,7 @@ import { addFinishedProjects } from './profile/projects';
 import { mergeSkillsAndExpertises } from './profile/skills';
 import { tidyEvaluations } from './profile/evaluations';
 import { layoutHome } from './profile/home-grid';
+import { reworkLogtime } from './profile/logtime';
 import { renderFamilyTree } from './profile/family';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
@@ -108,6 +109,7 @@ async function main() {
     mergeSkillsAndExpertises();
     tidyEvaluations();
     layoutHome(); // after the cards above are merged and renamed
+    reworkLogtime();
   }
   notifyUpdate();
 }

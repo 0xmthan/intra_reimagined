@@ -575,7 +575,7 @@ html.ir-embed .page-content .container-item {
     'skills achievements agenda'
     'patronages patronages patronages';
   gap: 20px;
-  margin: 0 0 24px !important;
+  margin: 20px 0 24px !important; /* below the news bar: the same 20px as between cards */
   padding: 0 15px;
 }
 .row.ir-home-grid::before, .row.ir-home-grid::after { display: none !important; }
