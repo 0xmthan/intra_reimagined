@@ -1,15 +1,8 @@
 // Settings: a gear in intra's left icon sidebar that opens intra's own settings page
 // (/users/<login>/edit), where we add an "Intra Reimagined" entry to its side menu.
-import { getSettings, onSettingsChange, setSetting, type Settings } from './store';
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
-
-type BoolSetting = keyof Settings;
-
-const TOGGLES: { key: BoolSetting; title: string; desc: string }[] = [
-  { key: 'darkMode', title: 'Dark mode', desc: 'Use a dark theme on every intra page.' },
-];
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -84,19 +77,6 @@ function addSettingsSection() {
   setHTML(section, `
     <div class="col-sm-12">
       <h4 class="font-weight-bold text-uppercase">Intra Reimagined${VERSION ? ` <span class="ir-setting-version">v${VERSION}</span>` : ''}</h4>
-      ${TOGGLES.map(
-        (t) => `
-      <div class="ir-setting">
-        <div class="ir-setting-text">
-          <label class="ir-setting-title" for="ir-toggle-${t.key}">${t.title}</label>
-          <div class="ir-setting-desc">${t.desc}</div>
-        </div>
-        <label class="ir-switch">
-          <input type="checkbox" id="ir-toggle-${t.key}" data-key="${t.key}" role="switch">
-          <span class="ir-switch-track"></span>
-        </label>
-      </div>`,
-      ).join('')}
     </div>`);
   pane.appendChild(section);
 
@@ -113,14 +93,6 @@ function addSettingsSection() {
     tag.append(' · ', link);
   });
 
-
-  const inputs = [...section.querySelectorAll<HTMLInputElement>('input[data-key]')];
-  const sync_ = (s: Settings) => inputs.forEach((i) => (i.checked = s[i.dataset.key as BoolSetting]));
-  getSettings().then(sync_);
-  onSettingsChange(sync_);
-  for (const input of inputs) {
-    input.addEventListener('change', () => setSetting(input.dataset.key as BoolSetting, input.checked));
-  }
 
   const show = (ours: boolean) => {
     for (const child of pane.children) {

@@ -1,38 +1,20 @@
-// Dark mode: toggles `html.ir-dark` (styles in dark.css). Runs at document_start so the page
-// never flashes white; a per-origin mirror gives an instant first guess before the async
-// extension storage answers.
+// Dark mode, always on: `html.ir-dark` (styles in dark.css), set at document_start so the page
+// never flashes white.
 //
 // dark.css recolors intra's known building blocks. Intra has many one-off boxes too, so a pass
 // over the page tags whatever is still light (backgrounds, borders) or dark (text) with .ir-dk-*
 // classes, judged from the original light-theme colors. Saturated colors, images and emojis are
 // never touched, so they keep their true colors.
-import { getSettings, onSettingsChange } from './store';
 
-const MIRROR_KEY = 'intra-reimagined:dark';
 const DONE = 'irDk'; // data-ir-dk on elements already looked at
 // Our own UI is designed dark already; intra's sidebar is natively dark.
 const SKIP = '#ir-hero, #ir-palette, #ir-side-tools, #ir-logo, .page-sidebar, svg, img, video, canvas, iframe';
 
 let observer: MutationObserver | undefined;
 
-function apply(dark: boolean) {
-  document.documentElement.classList.toggle('ir-dark', dark);
-  try {
-    localStorage.setItem(MIRROR_KEY, dark ? '1' : '0');
-  } catch {
-    /* storage blocked: extension storage still drives it */
-  }
-  if (dark) startTagging();
-}
-
 export function initTheme() {
-  try {
-    if (localStorage.getItem(MIRROR_KEY) === '1') apply(true);
-  } catch {
-    /* ignore */
-  }
-  getSettings().then((s) => apply(s.darkMode));
-  onSettingsChange((s) => apply(s.darkMode));
+  document.documentElement.classList.add('ir-dark');
+  startTagging();
 }
 
 // ---------- tagging ----------

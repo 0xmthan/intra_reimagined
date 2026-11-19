@@ -50,28 +50,6 @@ html.ir-logo-pinned .main-navbar {
 }
 
 /* ---------- our settings section (on intra's edit page) ---------- */
-.ir-setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  max-width: 560px;
-  padding: 16px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.ir-setting-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.ir-setting-desc {
-  color: #999;
-  font-size: 13px;
-}
-
 .ir-setting-update {
   color: #00babc;
 }
@@ -82,58 +60,6 @@ html.ir-logo-pinned .main-navbar {
   font-size: 13px;
   font-weight: normal;
   text-transform: none;
-}
-
-.ir-switch {
-  position: relative;
-  flex-shrink: 0;
-  width: 44px;
-  height: 24px;
-  margin: 0;
-  cursor: pointer;
-}
-
-.ir-switch input {
-  position: absolute;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  cursor: pointer;
-}
-
-.ir-switch-track {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: #ccc;
-  transition: background 0.15s;
-}
-
-.ir-switch-track::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s;
-}
-
-.ir-switch input:checked + .ir-switch-track {
-  background: #00babc;
-}
-
-.ir-switch input:checked + .ir-switch-track::after {
-  transform: translateX(20px);
-}
-
-.ir-switch input:focus-visible + .ir-switch-track {
-  outline: 2px solid #00babc;
-  outline-offset: 2px;
 }
 
 /* Dark mode lives in dark.css. */
