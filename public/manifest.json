@@ -4,6 +4,7 @@
   "description": "A modern, mobile-friendly redesign of the 42 intra profile page.",
   "permissions": [
     "storage",
+    "alarms",
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
@@ -56,6 +57,11 @@
         "enabled": true,
         "path": "rules.json"
       }
+    ]
+  },
+  "background": {
+    "scripts": [
+      "background.js"
     ]
   }
 }

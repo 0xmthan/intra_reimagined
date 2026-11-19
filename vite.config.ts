@@ -16,19 +16,22 @@ function manifest(): Plugin {
   };
 }
 
-// Content scripts can't be ES modules, so build a single self-contained IIFE.
+// Two self-contained IIFE scripts, built one at a time (lib mode can't make several IIFEs at
+// once): the content script (default) and the background script (IR_ENTRY=background).
+const entry = process.env.IR_ENTRY === 'background' ? 'background' : 'content';
+
 export default defineConfig(({ mode }) => ({
   plugins: [manifest()],
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    emptyOutDir: false, // the two builds share dist/; `pnpm build` clears it first
     sourcemap: mode === 'development' ? 'inline' : false,
     minify: mode !== 'development',
     lib: {
-      entry: 'src/content.ts',
+      entry: `src/${entry}.ts`,
       formats: ['iife'],
-      name: 'IntraReimagined',
-      fileName: () => 'content.js',
+      name: entry === 'content' ? 'IntraReimagined' : 'IntraReimaginedBackground',
+      fileName: () => `${entry}.js`,
     },
   },
 }));

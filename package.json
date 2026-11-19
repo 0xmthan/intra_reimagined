@@ -5,8 +5,8 @@
   "type": "module",
   "packageManager": "pnpm@12.8.1",
   "scripts": {
-    "dev": "vite build --watch --mode development",
-    "build": "tsc --noEmit && vite build",
+    "dev": "IR_ENTRY=background vite build --mode development && vite build --watch --mode development",
+    "build": "tsc --noEmit && rm -rf dist && vite build && IR_ENTRY=background vite build",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server",
     "run:desktop": "web-ext run -s dist --firefox=/Applications/Zen.app/Contents/MacOS/zen",
     "run:android": "web-ext run -s dist -t firefox-android --android-device=$ANDROID_DEVICE --firefox-apk=org.mozilla.firefox",
