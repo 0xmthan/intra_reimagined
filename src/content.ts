@@ -108,15 +108,20 @@ async function loggedIn(): Promise<boolean> {
 }
 
 /** On profile-v3: we only redesign v2, so offer to go there (once per browser session). */
+/**
+ * On profile-v3: we only redesign the classic profile (v2), so offer to go back (once per browser
+ * session). intra sends everyone with "Profile V3" switched on to v3 from every v2 page except its
+ * settings, so a plain link to v2 would bounce straight back: send them to the switch itself.
+ */
 async function offerV2() {
   if (await dismissed('stayOnV3')) return;
   const go = await ask({
     title: 'Intra Reimagined is installed',
-    body: 'It only works on the classic intra (profile.intra.42.fr). This page stays as it is.',
-    primary: 'Switch to profile.intra.42.fr',
-    secondary: 'Continue on this page',
+    body: "It only works on the classic profile. If intra keeps bringing you to this new one, Profile V3 is switched on in your intra settings: turn it off there to use Intra Reimagined.",
+    primary: 'Open Profile V3 settings',
+    secondary: 'Stay on this page',
   });
-  if (go) location.href = `${V2_ORIGIN}/`;
+  if (go) location.href = `${V2_ORIGIN}/v3_early_access`;
   else dismiss('stayOnV3');
 }
 
