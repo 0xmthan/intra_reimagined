@@ -2,6 +2,11 @@
   "manifest_version": 3,
   "name": "Intra Reimagined",
   "description": "A modern, mobile-friendly redesign of the 42 intra profile page.",
+  "icons": {
+    "48": "icon.svg",
+    "96": "icon.svg",
+    "128": "icon-128.png"
+  },
   "permissions": [
     "storage",
     "alarms",
