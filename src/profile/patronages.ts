@@ -30,7 +30,7 @@ export async function addHomePatronages() {
   // It keeps its id: intra's patronage styles hang off #patronages (the home page has none).
   const content = document.importNode(pane, true);
   content.classList.add('active');
-  renderFamilyTree(content, page);
+  renderFamilyTree(content, page!, title);
   box.append(title, content);
   col.append(box);
   grid.append(col);

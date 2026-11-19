@@ -51,8 +51,12 @@ function readPane(pane: Element, login: string, ownerAvatar?: string) {
   return { family: { login, people, links, truncated: false } as Family, titles };
 }
 
-/** Turns a #patronages pane into the tree. `doc` is the page the pane came from. */
-export function renderFamilyTree(pane: Element, doc: Document = document) {
+/**
+ * Turns a #patronages pane into the tree. `doc` is the page the pane came from. With `header`
+ * (our home card's title), "All families" and "Reports" go there as pills and the tree fills
+ * the card; otherwise they sit under the tree.
+ */
+export function renderFamilyTree(pane: Element, doc: Document = document, header?: Element) {
   if (pane.querySelector(HOST)) return;
   const reports = pane.querySelector<HTMLAnchorElement>('a[href$="/patronages"]');
   const owner = reports?.getAttribute('href')?.match(/\/users\/([^/]+)\/patronages$/)?.[1];
@@ -66,17 +70,24 @@ export function renderFamilyTree(pane: Element, doc: Document = document) {
   const style = document.createElement('style');
   style.textContent = CSS;
   const viewport = el('div', 'viewport');
-  const foot = el('div', 'foot');
-  const all = el('button', 'all');
+  const all = el('button', header ? 'btn simple-link' : 'all');
+  all.type = 'button';
   all.textContent = 'All families';
   all.addEventListener('click', () => openFamilies(owner));
   const reportsLink = document.createElement('a');
   reportsLink.href = reports.href;
   reportsLink.textContent = 'Reports';
-  foot.append(all, reportsLink);
+  const foot = el('div', 'foot');
+  if (header) {
+    reportsLink.className = 'btn simple-link';
+    const pills = el('span', 'pull-right');
+    pills.append(all, reportsLink);
+    header.append(pills);
+    host.setAttribute('fill', '');
+  } else foot.append(all, reportsLink);
   const frame = el('div', 'frame');
   frame.append(viewport, ...['up', 'down', 'left', 'right'].map((d) => el('div', `fade ${d}`)));
-  root.append(style, frame, foot);
+  root.append(style, frame, ...(header ? [] : [foot]));
   pane.replaceChildren(host);
 
   // Avatars: the page's first (fresher and bigger than the API's).
@@ -324,6 +335,10 @@ const CSS = `
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 .frame { position: relative; }
+/* Home card: the tree takes the card's whole height (its buttons are in the card's title). */
+:host([fill]) { height: 100%; display: flex; flex-direction: column; }
+:host([fill]) .frame { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+:host([fill]) .viewport { flex: 1; max-height: none; }
 .fade { position: absolute; pointer-events: none; opacity: 0; transition: opacity 160ms ease; z-index: 2; }
 .fade.up { top: 0; left: 0; right: 0; height: 36px; background: linear-gradient(var(--tree-bg), transparent); }
 .fade.down { bottom: 0; left: 0; right: 0; height: 36px; background: linear-gradient(transparent, var(--tree-bg)); }

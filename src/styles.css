@@ -658,7 +658,7 @@ html.ir-embed .page-content .container-item {
   gap: 6px;
 }
 /* Header buttons: soft pills like "Give", not intra's outlined boxes. */
-.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, .school-record-button) {
+.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, button.btn, .school-record-button) {
   display: inline-flex !important;
   align-items: center;
   gap: 4px;
@@ -676,7 +676,7 @@ html.ir-embed .page-content .container-item {
   text-decoration: none !important;
   box-shadow: none !important;
 }
-.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, .school-record-button):hover {
+.ir-home-grid h4.profile-title :is(a.btn, a.simple-link, button.btn, .school-record-button):hover {
   color: var(--ir-text, #e2e4ea) !important;
   background: rgba(255, 255, 255, 0.12) !important;
 }
@@ -784,3 +784,7 @@ html.ir-embed .page-content .container-item {
 @media (min-width: 768px) {
   .ir-home-grid > [data-ir-card]:not([data-ir-card='evals']) { contain: size; }
 }
+
+/* Patronages card: the tree fills it (no padding above or below the pane). */
+.ir-home-grid > [data-ir-card='patronages'] #patronages { padding: 0 !important; margin: 0 !important; overflow: hidden !important; }
+.ir-home-grid > [data-ir-card='patronages'] h4.profile-title button.btn { cursor: pointer; }
