@@ -44,6 +44,9 @@ export interface Goals {
   // Old blackhole system (e.g. accounts blackholed before pace): days left, negative once absorbed.
   singularity?: number;
   bh_date?: string; // dd.mm.yyyy
+  // Freeze in progress: days until it ends, and its end date (dd.mm.yyyy).
+  agu?: number;
+  agu_date?: string;
 }
 
 export interface Week {
@@ -250,13 +253,15 @@ export interface PiscineStudent {
   piscineLevel?: number | null;
   /** 42cursus level; null = didn't get into the common core. */
   cursusLevel?: number | null;
+  /** 42cursus blackhole date (ISO); in the past = blackholed. */
+  blackholedAt?: string | null;
 }
 
 /** Everyone from one piscine (same campus, month and year), via our server. */
 export async function fetchPiscineStudents(p: ApiPiscine): Promise<PiscineStudent[] | undefined> {
   if (!IR_API || p.campusId === null) return undefined;
   // ?v= busts browser caches of older response shapes (bump it when the response changes).
-  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}?v=2`, false);
+  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}?v=3`, false);
   return j?.students;
 }
 

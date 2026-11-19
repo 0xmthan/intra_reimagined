@@ -14,9 +14,11 @@ export function addTooltip(
   const text = Array.isArray(lines) ? lines : [lines];
 
   let tip: HTMLElement | undefined;
+  let watch: number | undefined;
   const hide = () => {
     tip?.remove();
     tip = undefined;
+    clearInterval(watch);
   };
   el.addEventListener('mouseenter', () => {
     hide();
@@ -47,6 +49,12 @@ export function addTooltip(
     const left = Math.min(Math.max(4, r.left + r.width / 2 - t.width / 2), window.innerWidth - t.width - 4);
     tip.style.top = `${top + window.scrollY}px`;
     tip.style.left = `${left + window.scrollX}px`;
+
+    // If the element is re-rendered or removed while hovered, it never gets mouseleave:
+    // drop the tooltip once the element is gone or no longer under the pointer.
+    watch = window.setInterval(() => {
+      if (!el.isConnected || !el.matches(':hover')) hide();
+    }, 250);
   });
   el.addEventListener('mouseleave', hide);
 }

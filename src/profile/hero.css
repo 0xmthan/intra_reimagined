@@ -587,6 +587,15 @@ select option {
   background: linear-gradient(160deg, rgba(255, 90, 95, 0.18), transparent 70%);
 }
 
+.deadline.frozen {
+  background: linear-gradient(160deg, rgba(120, 190, 255, 0.16), transparent 70%);
+}
+
+.deadline.frozen h3 svg,
+.deadline.frozen .big {
+  color: #8fcaff;
+}
+
 .deadline.danger h3 svg,
 .deadline.danger .big {
   color: var(--danger);

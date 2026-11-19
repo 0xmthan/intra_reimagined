@@ -47,7 +47,7 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
                <option value="login">Login</option>
              </select>
            </label>
-           <label class="toggle"><input type="checkbox" class="active-only"> Active only</label>
+           <label class="toggle"><input type="checkbox" class="active-only"> Cadets only</label>
          </div>
          <div class="grid"><div class="state">Loading students…</div></div>
        </section>
@@ -75,6 +75,19 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   filter.focus();
 
   let students: PiscineStudent[] = [];
+  // 42's "active?" is false while an account is frozen (and for everyone who left), so combine it
+  // with the 42cursus row: in 42cursus + blackhole ahead = cadet (frozen if inactive).
+  type Status = 'cadet' | 'frozen' | 'blackholed' | 'piscine';
+  const status = (s: PiscineStudent): Status =>
+    s.cursusLevel == null
+      ? 'piscine'
+      : s.blackholedAt && new Date(s.blackholedAt).getTime() < Date.now()
+        ? 'blackholed'
+        : s.active
+          ? 'cadet'
+          : 'frozen';
+  const BADGE: Record<Status, string> = { cadet: '', frozen: 'Frozen', blackholed: 'Blackholed', piscine: '' };
+  const TIP: Record<Status, string> = { cadet: '', frozen: 'Account frozen', blackholed: 'Blackholed', piscine: 'Did not join 42cursus' };
   const pisc = (s: PiscineStudent) => s.piscineLevel ?? -1;
   const SORTS: Record<string, (a: PiscineStudent, b: PiscineStudent) => number> = {
     // Got into 42cursus first (by that level), then the rest by piscine level.
@@ -95,18 +108,21 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   const render = () => {
     const q = filter.value.trim().toLowerCase();
     const shown = students
-      .filter((s) => (!activeOnly.checked || s.active) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)))
+      .filter((s) => (!activeOnly.checked || ['cadet', 'frozen'].includes(status(s))) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)))
       .sort((a, b) => SORTS[sortBy.value](a, b) || a.login.localeCompare(b.login));
     setHTML(
       grid,
       shown.length
         ? shown
             .map(
-              (s) => `<a class="student${s.active ? '' : ' inactive'}${s.login === opts.current ? ' current' : ''}" href="https://profile.intra.42.fr/users/${encodeURIComponent(s.login)}" title="${s.active ? '' : 'Account no longer active'}">
+              (s) => {
+                const st = status(s);
+                return `<a class="student ${st}${s.login === opts.current ? ' current' : ''}" href="https://profile.intra.42.fr/users/${encodeURIComponent(s.login)}" target="_blank" rel="noopener" title="${TIP[st]}">
                 <span class="pic"${s.image ? ` style="background-image:url('${esc(s.image)}')"` : ''}></span>
-                <span class="who"><b>${esc(s.login)}</b><small>${esc(s.name)}</small></span>
+                <span class="who"><b>${esc(s.login)}</b><small>${BADGE[st] ? `<i class="badge">${BADGE[st]}</i>` : ''}${esc(s.name)}</small></span>
                 ${levelHtml(s)}
-              </a>`,
+              </a>`;
+              },
             )
             .join('')
         : `<div class="state">No one matches.</div>`,
@@ -124,9 +140,16 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
       return;
     }
     students = list;
-    const active = list.filter((s) => s.active).length;
+    const n = (st: Status) => list.filter((s) => status(s) === st).length;
     const admitted = list.filter((s) => s.cursusLevel != null).length;
-    count.textContent = `${list.length} students · ${admitted} in 42cursus · ${active} active`;
+    count.textContent = [
+      `${list.length} students`,
+      `${admitted} in 42cursus`,
+      n('frozen') && `${n('frozen')} frozen`,
+      n('blackholed') && `${n('blackholed')} blackholed`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
     render();
   });
 }

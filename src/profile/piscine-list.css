@@ -140,11 +140,32 @@ input[type='search']:focus {
   background: rgba(0, 186, 188, 0.14);
   box-shadow: inset 0 0 0 1px rgba(0, 186, 188, 0.4);
 }
-.student.inactive {
+.student.piscine,
+.student.blackholed {
   opacity: 0.45;
 }
-.student.inactive:hover {
+.student.piscine:hover,
+.student.blackholed:hover {
   opacity: 0.8;
+}
+.badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+.student.frozen .badge {
+  background: rgba(120, 190, 255, 0.16);
+  color: #8fcaff;
+}
+.student.blackholed .badge {
+  background: rgba(255, 90, 95, 0.16);
+  color: #ff8a8e;
 }
 .pic {
   width: 38px;

@@ -23,17 +23,24 @@ interface ApiUser {
   kind: string;
 }
 
-/** user id → level in one cursus, asked 100 users at a time. */
-async function fetchLevels(api: FtApi, cursusId: number, ids: number[]): Promise<Map<number, number>> {
-  const levels = new Map<number, number>();
+interface CursusRow {
+  level: number;
+  blackholedAt: string | null;
+}
+
+/** user id → their row in one cursus (level, blackhole date), asked 100 users at a time. */
+async function fetchCursus(api: FtApi, cursusId: number, ids: number[]): Promise<Map<number, CursusRow>> {
+  const out = new Map<number, CursusRow>();
   for (let i = 0; i < ids.length; i += PER_PAGE) {
     const chunk = ids.slice(i, i + PER_PAGE);
-    const rows = await api.get<{ level: number; user: { id: number } }[]>(
+    const rows = await api.get<{ level: number; blackholed_at: string | null; user: { id: number } }[]>(
       `/v2/cursus_users?filter[cursus_id]=${cursusId}&filter[user_id]=${chunk.join(',')}&per_page=${PER_PAGE}`,
     );
-    for (const r of rows) levels.set(r.user.id, Math.max(levels.get(r.user.id) ?? 0, r.level));
+    for (const r of rows) {
+      if ((out.get(r.user.id)?.level ?? -1) < r.level) out.set(r.user.id, { level: r.level, blackholedAt: r.blackholed_at });
+    }
   }
-  return levels;
+  return out;
 }
 
 async function fetchList(api: FtApi, campusId: number, year: string, month: string): Promise<PiscineStudent[]> {
@@ -47,20 +54,21 @@ async function fetchList(api: FtApi, campusId: number, year: string, month: stri
     if (batch.length < PER_PAGE) break;
   }
   const ids = users.map((u) => u.id);
-  const piscine = await fetchLevels(api, C_PISCINE, ids);
-  const cursus = await fetchLevels(api, CURSUS_42, ids);
+  const piscine = await fetchCursus(api, C_PISCINE, ids);
+  const cursus = await fetchCursus(api, CURSUS_42, ids);
   return users.map((u) => ({
     login: u.login,
     name: u.usual_full_name || u.displayname,
     image: u.image?.versions?.small ?? null,
     active: !!u['active?'],
-    piscineLevel: piscine.get(u.id) ?? null,
-    cursusLevel: cursus.get(u.id) ?? null,
+    piscineLevel: piscine.get(u.id)?.level ?? null,
+    cursusLevel: cursus.get(u.id)?.level ?? null,
+    blackholedAt: cursus.get(u.id)?.blackholedAt ?? null,
   }));
 }
 
-/** Lists saved before levels existed get rebuilt instead of served. */
-const isCurrent = (l: PiscineList) => !l.students.length || 'piscineLevel' in l.students[0];
+/** Lists saved before the current student shape get rebuilt instead of served. */
+const isCurrent = (l: PiscineList) => !l.students.length || 'blackholedAt' in l.students[0];
 
 export class PiscineService {
   #inflight = new Map<string, Promise<PiscineList>>();

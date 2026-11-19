@@ -19,6 +19,8 @@ export interface PiscineStudent {
   piscineLevel: number | null;
   /** 42cursus level; null = didn't get into the common core. */
   cursusLevel: number | null;
+  /** 42cursus blackhole date (ISO); in the past = blackholed. */
+  blackholedAt: string | null;
 }
 
 export interface PiscineList {

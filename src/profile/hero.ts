@@ -141,6 +141,7 @@ const ICON = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   hole: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  snow: '<path d="M12 2v20M4.9 7l14.2 10M4.9 17 19.1 7"/><path d="m9 4 3 2 3-2M9 20l3-2 3 2M3.5 10.5l1.4-3.5 3.6.5M15.5 16.5l3.6.5 1.4-3.5M3.5 13.5l1.4 3.5 3.6-.5M15.5 7.5l3.6-.5 1.4 3.5"/>',
   wave: '<path d="M2 8c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 14c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/>',
 };
 const icon = (name: keyof typeof ICON) =>
@@ -193,7 +194,11 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const bhDays = goals?.singularity;
   const absorbed = bhDays !== undefined && bhDays < 0;
   const blackhole = !!goals?.probationary_period || bhDays !== undefined;
-  const danger = blackhole || (daysLeft !== undefined && daysLeft <= 14);
+  const frozen = goals?.agu !== undefined && goals.agu !== null;
+  // Pace system: a milestone deadline in the past means it was missed (blackholed while on probation).
+  const missed = !frozen && daysLeft !== undefined && daysLeft < 0;
+  const blackholed = absorbed || (missed && blackhole); // no common core ahead: no ETA/timeline
+  const danger = !frozen && (blackhole || (daysLeft !== undefined && daysLeft <= 14));
   const current = pace ? paceSegments(pace).find((s) => s.level === pace.milestone) : undefined;
   const used = current ? Math.min(1, Math.max(0, (Date.now() - current.from) / (current.to - current.from))) : undefined;
   const C = 2 * Math.PI * 18;
@@ -301,9 +306,15 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           </div>
           ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
-        <div class="card deadline ${danger ? 'danger' : ''}">
-          <h3>${icon(blackhole ? 'hole' : 'flag')} ${absorbed ? 'Blackholed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>
-          ${bhDays !== undefined && daysLeft === undefined ? `
+        <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}">
+          <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>
+          ${missed ? `
+            <div class="big" data-tip="${-daysLeft!} days">${spanHtml(Date.now() + daysLeft! * DAY_MS, Date.now())}<small> ago</small></div>
+            <div class="sub">Missed ${pace ? `Milestone ${pace.milestone}` : 'deadline'} · ${esc(goals?.next_milestone ?? '')}</div>
+          ` : frozen ? `
+            <div class="big">${goals!.agu}<small> day${goals!.agu === 1 ? '' : 's'} left</small></div>
+            <div class="sub">Ends ${esc(goals!.agu_date ?? '')}${goals?.next_milestone ? ` · next milestone ${esc(goals.next_milestone)}` : ''}</div>
+          ` : bhDays !== undefined && daysLeft === undefined ? `
             <div class="big" data-tip="${Math.abs(bhDays)} days">${spanHtml(Date.now(), Date.now() + bhDays * DAY_MS)}${absorbed ? '<small> ago</small>' : ''}</div>
             <div class="sub">${absorbed ? 'Absorbed on' : 'Blackhole on'} ${esc(goals?.bh_date ?? '')}</div>
           ` : daysLeft !== undefined ? `
@@ -317,7 +328,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         </div>
       </section>
 
-      ${goals?.cc_eta || pace ? `<section class="timeline">
+      ${!blackholed && (goals?.cc_eta || pace) ? `<section class="timeline">
         <div class="tl-eta">
           <span class="label">Common Core ETA</span>
           <span class="date">${esc(pace ? fmtIsoDate(pace.eta_end_of_cursus) : goals!.cc_eta!)}</span>
