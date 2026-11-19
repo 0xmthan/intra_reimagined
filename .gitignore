@@ -6,3 +6,4 @@ artifacts/
 .env.release
 release/
 server/.env
+.release-signed/

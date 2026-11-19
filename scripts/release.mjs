@@ -1,28 +1,36 @@
-// Bumps the version, builds, and either submits to addons.mozilla.org (AMO) or just packages it.
+// Bumps the version, builds, signs and publishes the extension.
 //
-//   pnpm release [patch|minor|major|<x.y.z>]   submit to the public AMO listing (default: patch)
-//   pnpm package [patch|minor|major|<x.y.z>]   only write the zips to release/ for a manual upload
+//   pnpm release [patch|minor|major|<x.y.z>]   sign on AMO ("unlisted": not shown on AMO) and publish
+//                                              the signed .xpi + updates.json on our server
+//   pnpm package [patch|minor|major|<x.y.z>]   only write the zips to release/ (no signing)
 //
-// `release` needs WEB_EXT_API_KEY and WEB_EXT_API_SECRET in .env.release (gitignored) or the
-// environment: https://addons.mozilla.org/developers/addon/api/key/
+// Users install https://intra.mthan.dev/install once; after that Firefox updates them from
+// https://intra.mthan.dev/updates.json (manifest update_url), checked hourly by background.ts.
 //
-// The bundle is minified, so AMO requires the original source: we zip every non-ignored file in
-// the repo alongside it (reviewers rebuild it with `pnpm install && pnpm build`).
+// .env.release (gitignored):
+//   WEB_EXT_API_KEY, WEB_EXT_API_SECRET  AMO API credentials (addons.mozilla.org/developers/addon/api/key/)
+//   IR_UPDATES_BASE   public base URL of the server       (default https://intra.mthan.dev)
+//   IR_DEPLOY         scp target for the releases folder   (default syn-local:Documents/intra-reimagined/releases)
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const manual = process.argv.includes('--manual');
 const bump = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 'patch';
 
 if (existsSync('.env.release')) process.loadEnvFile('.env.release');
+const BASE = (process.env.IR_UPDATES_BASE || 'https://intra.mthan.dev').replace(/\/+$/, '');
+const DEPLOY = process.env.IR_DEPLOY || 'syn-local:Documents/intra-reimagined/releases';
+const ADDON_ID = JSON.parse(readFileSync('public/manifest.json', 'utf8')).browser_specific_settings.gecko.id;
+
 const missing = ['WEB_EXT_API_KEY', 'WEB_EXT_API_SECRET'].filter((k) => !process.env[k]);
 if (!manual && missing.length) {
   console.error(`Missing ${missing.join(', ')} (set them in .env.release), or use \`pnpm package\`.`);
   process.exit(1);
 }
 
-// 1. Bump the version (AMO never accepts the same version twice).
+// 1. Bump the version (AMO never signs the same version twice).
 const original = readFileSync('package.json', 'utf8');
 const pkg = JSON.parse(original);
 const [maj, min, pat] = pkg.version.split('.').map(Number);
@@ -34,13 +42,14 @@ pkg.version = version;
 writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 console.log(`${manual ? 'Packaging' : 'Releasing'} ${version}`);
 
-// On any failure, put the old version back so the next attempt reuses this number.
+// Until AMO has signed it, a failure puts the old version back so a retry reuses this number.
+let signed = false;
 const run = (cmd, args, cwd) => {
   try {
     execFileSync(cmd, args, { stdio: 'inherit', env: process.env, cwd });
   } catch {
-    writeFileSync('package.json', original);
-    console.error(`\nFailed; package.json is back at ${JSON.parse(original).version}.`);
+    if (!signed) writeFileSync('package.json', original);
+    console.error(`\nFailed${signed ? ` after signing; package.json stays at ${version}` : `; package.json is back at ${JSON.parse(original).version}`}.`);
     process.exit(1);
   }
 };
@@ -59,22 +68,56 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
 run('zip', ['-q', src, ...files]);
 
 if (manual) {
-  console.log(`\nReady for manual upload at https://addons.mozilla.org/developers/addons:`);
-  console.log(`  extension: ${resolve(ext)}`);
-  console.log(`  source:    ${resolve(src)}   (when asked "Do you need to submit source code?": yes)`);
+  console.log(`\nReady:\n  extension: ${resolve(ext)}\n  source:    ${resolve(src)}`);
   process.exit(0);
 }
 
-// 3. Submit. Metadata (summary, categories, license) is only used for the very first submission.
+// 3. Sign as "unlisted" and download the signed .xpi (waits for Mozilla's automated review).
+const tmp = '.release-signed';
+rmSync(tmp, { recursive: true, force: true });
 run('pnpm', [
   'exec', 'web-ext', 'sign',
   '-s', 'dist',
-  '-a', 'release',
-  '--channel', 'listed',
-  '--amo-metadata', 'amo-metadata.json',
+  '-a', tmp,
+  '--channel', 'unlisted',
   '--upload-source-code', src,
-  '--approval-timeout', '0',
+  '--approval-timeout', String(20 * 60_000),
 ]);
+signed = true;
+const signedXpi = readdirSync(tmp).find((f) => f.endsWith('.xpi'));
+if (!signedXpi) {
+  console.error('Signed, but no .xpi was downloaded; get it from https://addons.mozilla.org/developers/addons');
+  process.exit(1);
+}
+const xpiName = `intra-reimagined-${version}.xpi`;
+const xpi = `release/${xpiName}`;
+copyFileSync(`${tmp}/${signedXpi}`, xpi);
+rmSync(tmp, { recursive: true, force: true });
 
-console.log(`\nSubmitted ${version} to AMO. It goes live after the automated review; check`);
-console.log('https://addons.mozilla.org/developers/addons for its status.');
+// 4. updates.json: start from what the server publishes (so no version is ever dropped), add this one.
+let updates = { addons: { [ADDON_ID]: { updates: [] } } };
+try {
+  const res = await fetch(`${BASE}/updates.json`, { cache: 'no-store' });
+  if (res.ok) updates = await res.json();
+} catch {
+  /* first release, or server unreachable: start fresh */
+}
+const entry = (updates.addons[ADDON_ID] ??= { updates: [] });
+entry.updates = entry.updates.filter((u) => u.version !== version);
+entry.updates.push({
+  version,
+  update_link: `${BASE}/xpi/${xpiName}`,
+  update_hash: `sha256:${createHash('sha256').update(readFileSync(xpi)).digest('hex')}`,
+});
+writeFileSync('release/updates.json', JSON.stringify(updates, null, 2) + '\n');
+
+// 5. Publish: the .xpi first, then the updates.json that points at it.
+const [host, dir] = DEPLOY.split(':');
+run('ssh', [host, `mkdir -p '${dir}'`]);
+run('scp', ['-q', xpi, `${DEPLOY}/${xpiName}`]);
+run('scp', ['-q', 'release/updates.json', `${DEPLOY}/updates.json`]);
+
+console.log(`\nPublished ${version}.`);
+console.log(`  install / share:  ${BASE}/install`);
+console.log(`  this version:     ${BASE}/xpi/${xpiName}`);
+console.log('Installed copies pick it up within the hour.');

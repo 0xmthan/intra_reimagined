@@ -6,6 +6,7 @@
 //                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
+//   GET /install, /updates.json, /xpi/<file>  →  self-hosted extension updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
 // Run: node index.ts (Node 23.6+ runs TypeScript directly), or docker compose up. Config: .env.example.
@@ -17,6 +18,7 @@ import { RateLimiter } from './rate-limit.ts';
 import { Db, type Piscine } from './db.ts';
 import { EvalService } from './evals.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
+import { serveRelease } from './releases.ts';
 
 const envFile = new URL('.env', import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -107,6 +109,7 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
   if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  if (serveRelease(url.pathname, res)) return;
   if (url.pathname === '/health') {
     try {
       await db?.ping();
