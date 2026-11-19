@@ -172,11 +172,14 @@ function weekBars(days: Day[]) {
   return wrap;
 }
 
-export async function reworkLogtime() {
-  const login = myLogin();
-  const card = [...document.querySelectorAll<HTMLElement>('.container-inner-item')].find(
+/** Your home page's card by default; others' profile pages pass theirs (user-page.ts). */
+export async function reworkLogtime(
+  login = myLogin(),
+  card = [...document.querySelectorAll<HTMLElement>('.container-inner-item')].find(
     (b) => b.querySelector('h4.profile-title')?.firstChild?.textContent?.trim() === 'Logtime',
-  );
+  ),
+) {
+  const own = login === myLogin();
   if (!login || !card || card.querySelector(HOST)) return;
   const days = await fetchDays(login);
   if (!days?.length || card.querySelector(HOST)) return;
@@ -193,7 +196,7 @@ export async function reworkLogtime() {
     tile('This week', fmtH(s.week), 'h', s.lastSoFar || s.week ? `${diff >= 0 ? '+' : '−'}${fmtH(Math.abs(diff))}h vs last week` : undefined, diff >= 0 ? 'up' : 'down'),
     tile('This month', fmtH(s.month), 'h'),
     tile('Daily average', fmtH(s.avg), 'h', `${s.activeDays} of the last 30 days`),
-    tile('Streak', String(s.streak), s.streak === 1 ? ' day' : ' days', s.streak ? 'in a row, still going' : 'come in today to start one'),
+    tile('Streak', String(s.streak), s.streak === 1 ? ' day' : ' days', s.streak ? 'in a row, still going' : own ? 'come in today to start one' : 'no streak right now'),
     tile('Longest streak', String(s.longest), s.longest === 1 ? ' day' : ' days'),
     tile('Best day', s.best && s.best.hours > 0 ? fmtH(s.best.hours) : '—', s.best && s.best.hours > 0 ? 'h' : '', s.best && s.best.hours > 0 ? short(s.best.date) : undefined),
   );

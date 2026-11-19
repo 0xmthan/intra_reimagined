@@ -111,6 +111,15 @@ export async function addFinishedProjects() {
   if (recommended.length) list.append(recommendedSection(recommended));
   if (!marks?.querySelector('.main-project-item')) return;
 
+  appendMarks(list, marks);
+}
+
+/**
+ * The profile's "Marks" list (intra's markup, copied) appended to a Projects card's list, with a
+ * Newest / A–Z picker and intra's cursus select applied. Used on your home page (from your fetched
+ * profile page) and on others' profile pages (from the page itself, user-page.ts).
+ */
+export function appendMarks(list: HTMLElement, marks: Element) {
   const section = document.createElement('div');
   section.id = LIST_ID;
   const head = document.createElement('div');

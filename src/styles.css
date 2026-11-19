@@ -788,3 +788,25 @@ html.ir-embed .page-content .container-item {
 /* Patronages card: the tree fills it (no padding above or below the pane). */
 .ir-home-grid > [data-ir-card='patronages'] #patronages { padding: 0 !important; margin: 0 !important; overflow: hidden !important; }
 .ir-home-grid > [data-ir-card='patronages'] h4.profile-title button.btn { cursor: pointer; }
+
+/* Others' profile pages (profile/user-page.ts): the same cards, their own arrangement. */
+.row.ir-home-grid.ir-user-grid {
+  grid-template-rows: 320px 430px 430px;
+  grid-template-areas:
+    'projects logtime logtime'
+    'projects skills achievements'
+    'projects patronages patronages';
+}
+@media (max-width: 1199px) {
+  .row.ir-home-grid.ir-user-grid {
+    grid-template-rows: 300px 400px 400px 400px;
+    grid-template-areas:
+      'logtime logtime'
+      'projects skills'
+      'projects achievements'
+      'patronages patronages';
+  }
+}
+@media (max-width: 767px) {
+  .row.ir-home-grid.ir-user-grid { grid-template-rows: none; grid-template-areas: none; }
+}

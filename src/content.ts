@@ -18,6 +18,7 @@ import { tidyEvaluations } from './profile/evaluations';
 import { layoutHome } from './profile/home-grid';
 import { reworkLogtime } from './profile/logtime';
 import { renderFamilyTree } from './profile/family';
+import { layoutUserPage } from './profile/user-page';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
@@ -98,8 +99,9 @@ async function main() {
   document.documentElement.classList.remove(TOOLS_PENDING);
   if (location.origin === V2_ORIGIN && isProfilePage()) {
     mountHero();
+    layoutUserPage(); // others' /users/<login>: the home page's card layout
     const pane = document.querySelector('#patronages');
-    if (pane) renderFamilyTree(pane);
+    if (pane) renderFamilyTree(pane); // no-op if the layout already made it a card
   }
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
