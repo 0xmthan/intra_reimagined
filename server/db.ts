@@ -15,6 +15,10 @@ export interface PiscineStudent {
   name: string;
   image: string | null;
   active: boolean;
+  /** C Piscine level, e.g. 8.07 (null if they have no C Piscine cursus). */
+  piscineLevel: number | null;
+  /** 42cursus level; null = didn't get into the common core. */
+  cursusLevel: number | null;
 }
 
 export interface PiscineList {
@@ -31,6 +35,8 @@ export interface EvalStats {
   total: number;
   failed: number;
   outstanding: number;
+  /** login → how many (filled-in) evaluations this student did of them. */
+  partners: Record<string, number>;
   refreshedAt: Date;
 }
 
@@ -67,19 +73,21 @@ export class Db {
         outstanding  integer not null,
         refreshed_at timestamptz not null default now()
       )`;
+    await this.#sql`alter table eval_stats add column if not exists partners jsonb`;
   }
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {
     const [row] = await this.#sql<EvalStats[]>`
-      select login, total, failed, outstanding, refreshed_at as "refreshedAt" from eval_stats where login = ${login}`;
+      select login, total, failed, outstanding, partners, refreshed_at as "refreshedAt" from eval_stats where login = ${login}`;
     return row;
   }
 
   async saveEvalStats(s: Omit<EvalStats, 'refreshedAt'>) {
     await this.#sql`
-      insert into eval_stats (login, total, failed, outstanding) values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding})
+      insert into eval_stats (login, total, failed, outstanding, partners)
+      values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding}, ${this.#sql.json(s.partners)})
       on conflict (login) do update set total = excluded.total, failed = excluded.failed,
-        outstanding = excluded.outstanding, refreshed_at = now()`;
+        outstanding = excluded.outstanding, partners = excluded.partners, refreshed_at = now()`;
   }
 
   async getPiscine(login: string): Promise<Piscine | undefined> {

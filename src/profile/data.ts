@@ -53,6 +53,7 @@ export interface Week {
 }
 
 export interface CoalitionInfo {
+  name?: string;
   score?: number;
   rank?: number;
   color?: string;
@@ -182,11 +183,11 @@ export const fetchGoals = (login: string, cursus: string) =>
 
 export async function fetchCoalition(login: string, cursus: string): Promise<CoalitionInfo | undefined> {
   const j = await getJSON<{
-    coalitions_user?: { score: number; rank: number; coalition: { color: string; image_url: string; cover_url: string } };
+    coalitions_user?: { score: number; rank: number; coalition: { name: string; color: string; image_url: string; cover_url: string } };
   }>(`/users/${encodeURIComponent(login)}/coalitions?cursus=${encodeURIComponent(cursus)}`);
   const c = j?.coalitions_user;
   return c
-    ? { score: c.score, rank: c.rank, color: c.coalition.color, icon: c.coalition.image_url, cover: c.coalition.cover_url }
+    ? { name: c.coalition.name, score: c.score, rank: c.rank, color: c.coalition.color, icon: c.coalition.image_url, cover: c.coalition.cover_url }
     : undefined;
 }
 
@@ -231,7 +232,8 @@ export interface ApiPiscine {
 export async function fetchPiscine(login: string): Promise<ApiPiscine | undefined> {
   if (!IR_API) return undefined;
   const j = await getJSON<{ month: string | null; year: string | null; campusId?: number | null }>(
-    `${IR_API}/v1/users/${encodeURIComponent(login)}/piscine`,
+    // ?v= busts browser caches of older response shapes (bump it when the response changes).
+    `${IR_API}/v1/users/${encodeURIComponent(login)}/piscine?v=2`,
     false,
   );
   if (!j?.month || !j.year) return undefined;
@@ -245,12 +247,16 @@ export interface PiscineStudent {
   name: string;
   image: string | null;
   active: boolean;
+  piscineLevel?: number | null;
+  /** 42cursus level; null = didn't get into the common core. */
+  cursusLevel?: number | null;
 }
 
 /** Everyone from one piscine (same campus, month and year), via our server. */
 export async function fetchPiscineStudents(p: ApiPiscine): Promise<PiscineStudent[] | undefined> {
   if (!IR_API || p.campusId === null) return undefined;
-  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}`, false);
+  // ?v= busts browser caches of older response shapes (bump it when the response changes).
+  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}?v=2`, false);
   return j?.students;
 }
 
@@ -272,11 +278,16 @@ export interface EvalStats {
   total: number;
   failed: number;
   outstanding: number;
+  /** On someone else's profile: evaluations between you and them, each way. */
+  together?: { youEvaluatedThem: number; theyEvaluatedYou: number };
 }
 
-/** What this student did as an evaluator, from 42's API via our server. */
-export async function fetchEvalStats(login: string): Promise<EvalStats | undefined> {
+/** What this student did as an evaluator (and, with `viewer`, how often you two met), via our server. */
+export async function fetchEvalStats(login: string, viewer?: string): Promise<EvalStats | undefined> {
   if (!IR_API) return undefined;
-  const j = await getJSON<EvalStats>(`${IR_API}/v1/users/${encodeURIComponent(login)}/evaluations`, false);
-  return j && typeof j.total === 'number' ? { total: j.total, failed: j.failed, outstanding: j.outstanding } : undefined;
+  const q = viewer && viewer !== login ? `?with=${encodeURIComponent(viewer)}` : '';
+  const j = await getJSON<EvalStats>(`${IR_API}/v1/users/${encodeURIComponent(login)}/evaluations${q}`, false);
+  return j && typeof j.total === 'number'
+    ? { total: j.total, failed: j.failed, outstanding: j.outstanding, together: j.together }
+    : undefined;
 }

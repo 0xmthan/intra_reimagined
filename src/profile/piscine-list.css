@@ -60,6 +60,7 @@ h2 {
 }
 .tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   padding: 0 22px 14px;
@@ -80,6 +81,28 @@ input[type='search'] {
 input[type='search']:focus {
   border-color: rgba(0, 186, 188, 0.6);
 }
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #b9bfcc;
+  white-space: nowrap;
+}
+.sort select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  color-scheme: dark;
+  cursor: pointer;
+}
+.sort select option {
+  background: #1d1f26;
+}
 .toggle {
   display: flex;
   align-items: center;
@@ -97,7 +120,7 @@ input[type='search']:focus {
   overscroll-behavior: contain;
   padding: 14px 16px 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 6px;
 }
 .student {
@@ -129,6 +152,20 @@ input[type='search']:focus {
   flex-shrink: 0;
   border-radius: 50%;
   background: #2c303c center / cover no-repeat;
+}
+.lvl {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #b9bfcc;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.lvl.cc {
+  background: rgba(0, 186, 188, 0.16);
+  color: #4fd1d3;
 }
 .who {
   display: flex;

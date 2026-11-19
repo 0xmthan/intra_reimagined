@@ -2,7 +2,8 @@
 // The extension never sees the 42 app secret; it only gets the few fields it shows.
 //
 //   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
-//   GET /v1/users/:login/evaluations  →  { login, total, failed, outstanding, refreshedAt }
+//   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
+//                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
 //
@@ -140,7 +141,10 @@ const server = createServer(async (req, res) => {
       // Let the browser cache it too: a piscine date doesn't change.
       return send(res, 200, piscine, { 'Cache-Control': 'public, max-age=86400' });
     }
-    send(res, 200, await evals.get(login), { 'Cache-Control': 'public, max-age=600' });
+    const { partners: _, ...stats } = await evals.get(login); // the partner table stays on the server
+    const viewer = url.searchParams.get('with')?.toLowerCase();
+    const together = viewer && viewer !== login && /^[a-z0-9-]{1,32}$/.test(viewer) ? await evals.together(login, viewer) : undefined;
+    send(res, 200, { ...stats, together }, { 'Cache-Control': 'public, max-age=600' });
   } catch (e) {
     if (e instanceof FtApiError && e.status === 404) return send(res, 404, { error: 'unknown login' });
     console.error(e);

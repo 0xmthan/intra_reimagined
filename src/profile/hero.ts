@@ -9,6 +9,7 @@ import { fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPis
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
+import { myLogin } from '../me';
 import { openPiscineList } from './piscine-list';
 import { setHTML } from '../html';
 
@@ -66,6 +67,8 @@ export function mountHero() {
       fetchCoalition(state.data.login, state.data.cursus.value),
     ]);
     if (mine !== req) return; // a newer cursus was picked meanwhile
+    // Re-read intra's banner too: by now intra has finished its own cursus switch.
+    state.data = readHero() ?? state.data;
     Object.assign(state, { goals, coal, goalsLoaded: true });
     paint();
     if (!goals?.edtrax_weeks?.length && !state.logWeeks) {
@@ -79,7 +82,7 @@ export function mountHero() {
     else if (!data.piscine) state.piscineLabel = (await fetchPiscineFromProfile(data.login))?.label;
     if (state.piscine || state.piscineLabel) paint();
   });
-  fetchEvalStats(data.login).then((evals) => {
+  fetchEvalStats(data.login, data.own ? undefined : myLogin()).then((evals) => {
     state.evals = evals ?? null;
     paint();
   });
@@ -164,10 +167,24 @@ function spanHtml(fromMs: number, toMs: number) {
   return `${days}<small> days</small>`;
 }
 
+/** "You and ybarut had 4 evaluations together", with the split on hover. */
+function togetherHtml(login: string, t?: EvalStats['together']) {
+  if (!t) return '';
+  const n = t.youEvaluatedThem + t.theyEvaluatedYou;
+  if (!n) return `<div class="together muted">You and ${esc(login)} haven't evaluated each other yet</div>`;
+  const tip = `You evaluated them ${t.youEvaluatedThem}× · they evaluated you ${t.theyEvaluatedYou}×`;
+  return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
+}
+
 function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals }: State) {
-  const color = coal?.color ?? d.coalition?.color ?? '#00babc';
-  hero.style.setProperty('--coal', color);
-  hero.style.setProperty('--cover', d.cover ? `url("${d.cover}")` : 'none');
+  // Coalition look for the selected cursus. Until that cursus's data has loaded, keep showing the
+  // previous one as a whole (intra's banner may be half-switched), never a mix of the two.
+  const c = goalsLoaded
+    ? coal
+    : (coal ?? (d.coalition ? { name: d.coalition.name, color: d.coalition.color, score: d.coalition.score, rank: d.coalition.rank } : undefined));
+  const cover = coal?.cover ?? (goalsLoaded || !coal ? d.cover : undefined);
+  hero.style.setProperty('--coal', c?.color ?? '#00babc');
+  if (cover || goalsLoaded) hero.style.setProperty('--cover', cover ? `url("${cover}")` : 'none');
 
   // ── deadline: next milestone (or blackhole while on probation) ──
   const deadlineAt = parseDmy(goals?.next_milestone);
@@ -187,9 +204,10 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const maxW = Math.max(40, ...weeks.map((w) => w.hours));
   const wkLabel = (n: string) => (/last/i.test(n) ? 'Last' : n);
 
-  const coalName = d.coalition?.name;
-  const score = coal?.score ?? d.coalition?.score;
-  const rank = coal?.rank ?? d.coalition?.rank;
+  const coalName = c?.name;
+  const score = c?.score;
+  const rank = c?.rank;
+  const coalHref = d.coalition && d.coalition.name === coalName ? d.coalition.href : undefined;
   const passed = evals ? evals.total - evals.failed : 0;
   const failRate = evals?.total ? Math.round((evals.failed / evals.total) * 100) : 0;
   const etaDays = goals?.cc_eta ? Math.ceil(((parseDmy(goals.cc_eta) ?? 0) - Date.now()) / DAY_MS) : undefined;
@@ -209,7 +227,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         <div class="who">
           ${coalName ? `<div class="coal-line">
             <span class="coal-flag">${coal?.icon ? `<img src="${esc(coal.icon)}" alt="">` : ''}</span>
-            <a href="${esc(d.coalition?.href ?? '#')}">${esc(coalName)}</a>
+            ${coalHref ? `<a href="${esc(coalHref)}">${esc(coalName)}</a>` : `<span>${esc(coalName)}</span>`}
             ${score != null ? `<span class="dot"></span><span class="stat" data-tip="Coalition score">${icon('trophy')} ${score.toLocaleString()}</span>` : ''}
             ${rank != null ? `<span class="dot"></span><span class="stat" data-tip="Rank in coalition">#${rank}</span>` : ''}
           </div>` : ''}
@@ -226,7 +244,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             <button class="chip btn" data-act="copy" data-tip="Copy login">${icon('copy')} ${esc(d.login)}</button>
             ${d.grade ? `<span class="chip">${esc(d.grade)}</span>` : ''}
             ${piscine?.campusId != null
-              ? `<button class="chip btn" data-act="piscine" data-tip="Piscine · see who was in it">${icon('wave')} ${esc(piscine.label)}</button>`
+              ? `<button class="chip btn" data-act="piscine" data-tip="Piscine">${icon('wave')} ${esc(piscine.label)}</button>`
               : piscine || piscineLabel || d.piscine
                 ? `<span class="chip" data-tip="Piscine">${icon('wave')} ${esc(piscine?.label ?? piscineLabel ?? d.piscine!.label)}</span>`
                 : ''}
@@ -280,7 +298,8 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
                 <span class="star" data-tip="Outstanding flags given">★ ${evals.outstanding} outstanding</span>
               </div>
             </div>` : ''}
-          </div>` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
+          </div>
+          ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}">
           <h3>${icon(blackhole ? 'hole' : 'flag')} ${absorbed ? 'Blackholed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>

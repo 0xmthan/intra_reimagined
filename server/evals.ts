@@ -10,6 +10,7 @@ export const EVALS_STALE_MS = 6 * 3_600_000;
 
 interface ScaleTeam {
   filled_at: string | null;
+  correcteds: { login: string }[] | string;
   final_mark: number | null;
   flag: { name: string; positive: boolean } | null;
 }
@@ -22,7 +23,25 @@ export function summarize(login: string, teams: ScaleTeam[]): Omit<EvalStats, 'r
     total: done.length,
     failed: done.filter((t) => t.flag?.positive === false || (t.final_mark !== null && t.final_mark < 50)).length,
     outstanding: done.filter((t) => /outstanding/i.test(t.flag?.name ?? '')).length,
+    partners: countPartners(done),
   };
+}
+
+/** login → number of evaluations of them ("correcteds" is a string when 42 hides it). */
+function countPartners(done: ScaleTeam[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const t of done) {
+    if (!Array.isArray(t.correcteds)) continue;
+    for (const c of t.correcteds) out[c.login] = (out[c.login] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** Evaluations between two students, in each direction. */
+export interface Together {
+  with: string;
+  youEvaluatedThem: number;
+  theyEvaluatedYou: number;
 }
 
 async function fetchAll(api: FtApi, login: string): Promise<ScaleTeam[]> {
@@ -65,9 +84,16 @@ export class EvalService {
     return p;
   }
 
+  /** `viewer` and `login`: how often each evaluated the other. */
+  async together(login: string, viewer: string): Promise<Together> {
+    const [them, you] = await Promise.all([this.get(login), this.get(viewer)]);
+    return { with: login, youEvaluatedThem: you.partners[login] ?? 0, theyEvaluatedYou: them.partners[viewer] ?? 0 };
+  }
+
   async get(login: string): Promise<EvalStats> {
     const stored = (await this.#db?.getEvalStats(login)) ?? this.#memory.get(login);
-    if (!stored) return { ...(await this.#refresh(login)), refreshedAt: new Date() };
+    // Rows saved before partners were tracked are rebuilt instead of served.
+    if (!stored || !stored.partners) return { ...(await this.#refresh(login)), refreshedAt: new Date() };
     if (Date.now() - stored.refreshedAt.getTime() > EVALS_STALE_MS) {
       this.#refresh(login).catch((e) => console.error('eval refresh failed', login, e));
     }

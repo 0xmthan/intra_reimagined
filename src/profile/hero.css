@@ -522,6 +522,19 @@ select option {
   background: var(--danger);
 }
 
+.together {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.together b {
+  color: var(--text);
+  font-weight: 600;
+}
+.together.muted {
+  opacity: 0.8;
+}
+
 .evlegend {
   display: flex;
   flex-wrap: wrap;

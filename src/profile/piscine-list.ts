@@ -40,6 +40,13 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
          </header>
          <div class="tools">
            <input type="search" placeholder="Filter by login or name…" spellcheck="false" autocomplete="off">
+           <label class="sort">Sort
+             <select class="sort-by">
+               <option value="level">Level</option>
+               <option value="piscine">Piscine level</option>
+               <option value="login">Login</option>
+             </select>
+           </label>
            <label class="toggle"><input type="checkbox" class="active-only"> Active only</label>
          </div>
          <div class="grid"><div class="state">Loading students…</div></div>
@@ -54,6 +61,7 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   const count = root.querySelector<HTMLElement>('.count')!;
   const filter = root.querySelector<HTMLInputElement>('input[type="search"]')!;
   const activeOnly = root.querySelector<HTMLInputElement>('.active-only')!;
+  const sortBy = root.querySelector<HTMLSelectElement>('.sort-by')!;
 
   root.querySelector('.x')!.addEventListener('click', close);
   bg.addEventListener('mousedown', (e) => e.target === bg && close());
@@ -67,11 +75,28 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   filter.focus();
 
   let students: PiscineStudent[] = [];
+  const pisc = (s: PiscineStudent) => s.piscineLevel ?? -1;
+  const SORTS: Record<string, (a: PiscineStudent, b: PiscineStudent) => number> = {
+    // Got into 42cursus first (by that level), then the rest by piscine level.
+    level: (a, b) =>
+      Number(b.cursusLevel != null) - Number(a.cursusLevel != null) ||
+      (b.cursusLevel ?? 0) - (a.cursusLevel ?? 0) ||
+      pisc(b) - pisc(a),
+    piscine: (a, b) => pisc(b) - pisc(a),
+    login: () => 0,
+  };
+  const lvl = (n: number) => n.toFixed(2);
+  const levelHtml = (s: PiscineStudent) => {
+    const main = sortBy.value === 'piscine' ? s.piscineLevel : (s.cursusLevel ?? s.piscineLevel);
+    if (main == null) return '';
+    const isCursus = sortBy.value !== 'piscine' && s.cursusLevel != null;
+    return `<span class="lvl${isCursus ? ' cc' : ''}" title="${isCursus ? `42cursus level${s.piscineLevel != null ? ` · piscine ${lvl(s.piscineLevel)}` : ''}` : 'Piscine level'}">${lvl(main)}</span>`;
+  };
   const render = () => {
     const q = filter.value.trim().toLowerCase();
-    const shown = students.filter(
-      (s) => (!activeOnly.checked || s.active) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)),
-    );
+    const shown = students
+      .filter((s) => (!activeOnly.checked || s.active) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)))
+      .sort((a, b) => SORTS[sortBy.value](a, b) || a.login.localeCompare(b.login));
     setHTML(
       grid,
       shown.length
@@ -80,6 +105,7 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
               (s) => `<a class="student${s.active ? '' : ' inactive'}${s.login === opts.current ? ' current' : ''}" href="https://profile.intra.42.fr/users/${encodeURIComponent(s.login)}" title="${s.active ? '' : 'Account no longer active'}">
                 <span class="pic"${s.image ? ` style="background-image:url('${esc(s.image)}')"` : ''}></span>
                 <span class="who"><b>${esc(s.login)}</b><small>${esc(s.name)}</small></span>
+                ${levelHtml(s)}
               </a>`,
             )
             .join('')
@@ -88,6 +114,7 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   };
   filter.addEventListener('input', render);
   activeOnly.addEventListener('change', render);
+  sortBy.addEventListener('change', render);
 
   fetchPiscineStudents(piscine).then((list) => {
     if (!host || !root.contains(grid)) return; // closed meanwhile
@@ -96,10 +123,10 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
       setHTML(grid, `<div class="state">Couldn't load this piscine right now.</div>`);
       return;
     }
-    // Active accounts first, then alphabetical.
-    students = [...list].sort((a, b) => Number(b.active) - Number(a.active) || a.login.localeCompare(b.login));
+    students = list;
     const active = list.filter((s) => s.active).length;
-    count.textContent = `${list.length} students · ${active} active`;
+    const admitted = list.filter((s) => s.cursusLevel != null).length;
+    count.textContent = `${list.length} students · ${admitted} in 42cursus · ${active} active`;
     render();
   });
 }
