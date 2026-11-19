@@ -142,7 +142,6 @@ select {
 .lvl-ring .fg {
   stroke: var(--coal);
   stroke-linecap: round;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--coal) 70%, transparent));
 }
 
 .lvl-chip {
