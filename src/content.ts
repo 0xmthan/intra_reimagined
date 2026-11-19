@@ -11,6 +11,7 @@ import { V2_ORIGIN, V3_ORIGIN } from './pace/types';
 import { initTheme } from './theme';
 import { pinLogo } from './logo';
 import { mountHero } from './profile/hero';
+import { addHomePatronages } from './profile/patronages';
 import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
@@ -79,6 +80,7 @@ async function main() {
   if (location.origin === V2_ORIGIN && isProfilePage()) mountHero();
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
+  if (location.origin === V2_ORIGIN && location.pathname === '/') addHomePatronages();
 }
 
 /** Logged in with 42, or asks to (once per browser session; after Skip, a corner button offers it). */
