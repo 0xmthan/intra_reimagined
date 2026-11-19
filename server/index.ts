@@ -7,6 +7,7 @@
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
+//   GET /v1/users/:login/banner, PUT|DELETE /v1/me/banner, GET /banners/<hash>.<ext>  →  custom banners (banners.ts)
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
@@ -21,6 +22,7 @@ import { EvalService } from './evals.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
 import { Auth } from './auth.ts';
+import { BannerError, MAX_BYTES, MIME, bannerPath, processUpload, readBody, serveBanner, type ImageType } from './banners.ts';
 
 const envFile = new URL('.env', import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -48,6 +50,8 @@ const api = new FtApi(FT_UID, FT_SECRET);
 const piscineCache = new TtlCache<Piscine | null>(5000); // hot logins, in front of Postgres
 const limiter = new RateLimiter(60, 60_000); // per signed-in login: 60 requests / minute
 const authLimiter = new RateLimiter(20, 60_000); // per client IP, for the login routes
+const uploadLimiter = new RateLimiter(10, 3_600_000); // per login: banner changes per hour
+const imageLimiter = new RateLimiter(300, 60_000); // per client IP, for /banners/ images
 const auth = new Auth(FT_UID, FT_SECRET, AUTH_SECRET, PUBLIC_URL);
 
 const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefined;
@@ -115,13 +119,18 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Authorization',
+      'Access-Control-Allow-Methods': 'GET, PUT, DELETE',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Max-Age': '86400',
     });
     return res.end();
   }
-  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  // Only the banner route takes writes; everything else is read-only.
+  const write = req.method === 'PUT' || req.method === 'DELETE';
+  if (req.method !== 'GET' && !(write && url.pathname === '/v1/me/banner')) {
+    req.resume();
+    return send(res, 405, { error: 'method not allowed' });
+  }
   if (serveRelease(url.pathname, req, res)) return;
   if (url.pathname === '/health') {
     try {
@@ -135,6 +144,66 @@ const server = createServer(async (req, res) => {
   if (url.pathname.startsWith('/auth/')) {
     if (!authLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
     if (await auth.handle(url, res)) return;
+  }
+
+  if (url.pathname.startsWith('/banners/')) {
+    if (!imageLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    const load = async (hash: string) => {
+      const row = await db?.getBannerData(hash);
+      return row && row.type in MIME ? { type: row.type as ImageType, data: row.data } : undefined;
+    };
+    try {
+      if (await serveBanner(url.pathname, res, load)) return;
+    } catch (e) {
+      console.error(e);
+      return send(res, 503, { error: 'unavailable' });
+    }
+    return send(res, 404, { error: 'not found' });
+  }
+
+  const bm = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/banner$/i);
+  if (bm || url.pathname === '/v1/me/banner') {
+    const me = auth.verify(req);
+    if (!me) {
+      req.resume();
+      return send(res, 401, { error: 'login with 42 required' });
+    }
+    if (!limiter.take(me)) {
+      req.resume();
+      return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    }
+    if (!db) {
+      req.resume();
+      return send(res, 503, { error: 'banners need the database' });
+    }
+    try {
+      if (bm) {
+        const b = await db.getBannerOf(bm[1].toLowerCase());
+        const url = b && b.type in MIME ? bannerPath(b.hash, b.type as ImageType) : null;
+        // no-cache: a changed banner must show right away (the image itself is cached forever by hash).
+        return send(res, 200, { url }, { 'Cache-Control': 'private, no-cache' });
+      }
+      if (req.method === 'GET') return send(res, 405, { error: 'method not allowed' });
+      if (!uploadLimiter.take(me)) {
+        req.resume();
+        return send(res, 429, { error: 'Too many banner changes; try again in an hour.' }, { 'Retry-After': '3600' });
+      }
+      if (req.method === 'DELETE') {
+        await db.deleteBanner(me);
+        return send(res, 200, { url: null });
+      }
+      const img = processUpload(await readBody(req, MAX_BYTES));
+      await db.saveBanner(me, img.hash, img.type, img.data);
+      return send(res, 200, { url: bannerPath(img.hash, img.type) });
+    } catch (e) {
+      if (e instanceof BannerError) {
+        // The body may be unread (too big): answer, then drop the connection instead of draining it.
+        res.on('finish', () => req.socket.destroy());
+        return send(res, e.status, { error: e.message }, { Connection: 'close' });
+      }
+      console.error(e);
+      return send(res, 500, { error: 'could not save the banner' });
+    }
   }
 
   const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);

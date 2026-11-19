@@ -76,6 +76,36 @@ export class Db {
         refreshed_at timestamptz not null default now()
       )`;
     await this.#sql`alter table eval_stats add column if not exists partners jsonb`;
+    // One custom banner per student (banners.ts); served publicly by its content hash.
+    await this.#sql`
+      create table if not exists banners (
+        login      text primary key,
+        hash       text not null,
+        type       text not null,
+        data       bytea not null,
+        updated_at timestamptz not null default now()
+      )`;
+    await this.#sql`create index if not exists banners_hash on banners (hash)`;
+  }
+
+  async getBannerOf(login: string): Promise<{ hash: string; type: string } | undefined> {
+    const [row] = await this.#sql<{ hash: string; type: string }[]>`select hash, type from banners where login = ${login}`;
+    return row;
+  }
+
+  async getBannerData(hash: string): Promise<{ type: string; data: Buffer } | undefined> {
+    const [row] = await this.#sql<{ type: string; data: Buffer }[]>`select type, data from banners where hash = ${hash} limit 1`;
+    return row;
+  }
+
+  async saveBanner(login: string, hash: string, type: string, data: Buffer) {
+    await this.#sql`
+      insert into banners (login, hash, type, data) values (${login}, ${hash}, ${type}, ${data})
+      on conflict (login) do update set hash = excluded.hash, type = excluded.type, data = excluded.data, updated_at = now()`;
+  }
+
+  async deleteBanner(login: string) {
+    await this.#sql`delete from banners where login = ${login}`;
   }
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {
