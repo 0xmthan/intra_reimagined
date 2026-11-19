@@ -120,7 +120,9 @@ select {
   object-fit: cover;
   background: #1c2030;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  cursor: zoom-in;
 }
+
 
 .lvl-ring {
   position: absolute;
@@ -128,6 +130,7 @@ select {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+  pointer-events: none; /* clicks reach the photo underneath */
 }
 
 .lvl-ring circle {
@@ -188,28 +191,47 @@ select {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-self: start; /* only as wide as its contents, so only they are clickable */
+  max-width: 100%;
   gap: 10px;
   font-size: 15px;
   color: var(--muted);
+  text-decoration: none;
+}
+
+/* The whole line links to the coalition page. */
+a.coal-line {
+  cursor: pointer;
+}
+a.coal-line:hover .coal-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+a.coal-line:hover .coal-flag {
+  filter: brightness(1.12);
 }
 
 .coal-flag {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 28px;
-  background: var(--coal);
+  width: 26px;
+  height: 32px;
+  /* Lit from above, so the white crest stands off it instead of sitting flat. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.28)),
+    var(--coal);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
   clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
 }
 
 .coal-flag img {
-  width: 15px;
-  height: 15px;
-  margin-top: -3px;
-  filter: brightness(0) invert(1);
+  width: 20px;
+  height: 20px;
+  margin-top: -4px;
+  filter: brightness(0) invert(1) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
 }
 
-.coal-line a {
+.coal-name {
   color: var(--coal);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -835,6 +857,9 @@ select option {
   .coal-line,
   .chips {
     justify-content: center;
+  }
+  .coal-line {
+    justify-self: center;
   }
   .name {
     font-size: 30px;

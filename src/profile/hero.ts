@@ -109,6 +109,8 @@ export function mountHero() {
   // Piscine chip → everyone from that piscine; "Connect" → login with 42 for our server.
   hero.addEventListener('click', (e) => {
     if ((e.target as Element).closest('[data-act="connect"]')) return void connect();
+    const avatar = (e.target as Element).closest<HTMLImageElement>('img.avatar');
+    if (avatar) return void openAvatar(avatar);
     if (!(e.target as Element).closest('[data-act="piscine"]') || !state.piscine) return;
     openPiscineList(state.piscine, { campus: state.data.campus, current: state.data.login });
   });
@@ -121,6 +123,89 @@ export function mountHero() {
     state.data.cursus.el.dispatchEvent(new Event('change', { bubbles: true })); // followSelect picks it up
   });
 }
+
+/** Profile picture, big and centered (like Instagram). Click it to zoom in more (and back);
+ * click outside it or press Escape to close. Its own layer on <html>, above intra's sidebar. */
+function openAvatar(img: HTMLImageElement) {
+  if (document.querySelector('ir-avatar-zoom')) return;
+  const host = document.createElement('ir-avatar-zoom');
+  const root = host.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = ZOOM_CSS;
+  const zoom = document.createElement('div');
+  zoom.className = 'avatar-zoom';
+  zoom.setAttribute('role', 'dialog');
+  zoom.setAttribute('aria-label', img.alt);
+  const big = document.createElement('img');
+  big.src = img.currentSrc || img.src;
+  big.alt = img.alt;
+  big.addEventListener('click', (e) => {
+    e.stopPropagation();
+    zoom.classList.toggle('more');
+  });
+  zoom.append(big);
+  const close = () => {
+    document.removeEventListener('keydown', onKey, true);
+    zoom.classList.add('closing');
+    setTimeout(() => host.remove(), 150);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') close();
+  };
+  zoom.addEventListener('click', close);
+  document.addEventListener('keydown', onKey, true);
+  root.append(style, zoom);
+  document.documentElement.append(host);
+}
+
+const ZOOM_CSS = `
+:host { all: initial; }
+.avatar-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: zoom-out;
+  animation: zoom-fade 160ms ease-out;
+}
+.avatar-zoom img {
+  width: min(420px, 82vw, 82vh);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1c2030;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  cursor: zoom-in;
+  transition: width 220ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  animation: zoom-pop 200ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.avatar-zoom.more img {
+  width: min(760px, 94vw, 94vh);
+  cursor: zoom-out;
+}
+.avatar-zoom.closing {
+  opacity: 0;
+  transition: opacity 150ms;
+}
+@keyframes zoom-fade {
+  from { opacity: 0; }
+}
+@keyframes zoom-pop {
+  from { transform: scale(0.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-zoom,
+  .avatar-zoom img {
+    animation: none;
+    transition: none;
+  }
+}
+`;
 
 /** Hide intra's banner (CSS keyed on html.ir-hero-on) and show it again. */
 export function unmountHero() {
@@ -237,12 +322,12 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         </div>
 
         <div class="who">
-          ${coalName ? `<div class="coal-line">
+          ${coalName ? `<${coalHref ? `a href="${esc(coalHref)}"` : 'div'} class="coal-line">
             <span class="coal-flag">${coal?.icon ? `<img src="${esc(coal.icon)}" alt="">` : ''}</span>
-            ${coalHref ? `<a href="${esc(coalHref)}">${esc(coalName)}</a>` : `<span>${esc(coalName)}</span>`}
+            <span class="coal-name">${esc(coalName)}</span>
             ${score != null ? `<span class="dot"></span><span class="stat" data-tip="Coalition score">${icon('trophy')} ${score.toLocaleString()}</span>` : ''}
             ${rank != null ? `<span class="dot"></span><span class="stat" data-tip="Rank in coalition">#${rank}</span>` : ''}
-          </div>` : ''}
+          </${coalHref ? 'a' : 'div'}>` : ''}
           <div class="name-row">
             <h1 class="name">${esc(d.name)}</h1>
             ${d.badge ? `<span class="badge" style="${d.badge.background ? `--badge-bg:url('${esc(d.badge.background)}')` : ''}">${esc(d.badge.text)}</span>` : ''}
