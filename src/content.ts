@@ -15,6 +15,7 @@ import { getSettings, onSettingsChange } from './store';
 import { setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
+import { initNews } from './news';
 
 const STYLE_ID = 'intra-reimagined-styles';
 
@@ -59,6 +60,7 @@ async function main() {
   addSettingsButton();
   initSidebarTools();
   if (location.origin === V2_ORIGIN && isProfilePage()) initProfileHeader();
+  if (location.origin === V2_ORIGIN) initNews();
 }
 
 async function initSidebarTools() {

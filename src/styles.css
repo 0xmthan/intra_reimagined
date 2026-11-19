@@ -515,3 +515,8 @@ html.ir-embed .page-content .container-item {
   margin: 12px !important;
   width: auto !important;
 }
+
+/* Announcements box: replaced by a bar + drawer (news.ts). */
+.ir-news-hidden {
+  display: none !important;
+}

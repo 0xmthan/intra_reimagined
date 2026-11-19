@@ -59,6 +59,7 @@ const neutral = (c: Rgba) => Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) <
  */
 function tag(el: HTMLElement) {
   el.dataset[DONE] = '';
+  if (el === document.body) return; // the page background is dark.css's job
   const s = getComputedStyle(el);
   if (s.display === 'none') return;
 

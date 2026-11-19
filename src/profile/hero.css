@@ -67,6 +67,19 @@ select {
     linear-gradient(180deg, rgba(8, 10, 14, 0.15) 0%, rgba(8, 10, 14, 0.55) 45%, rgba(8, 10, 14, 0.92) 100%);
 }
 
+/* In dark mode the page continues the header: fade its bottom edge into the page color. */
+.hero::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 90px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, var(--ir-fade, transparent));
+}
+
 .inner {
   position: relative;
   display: grid;

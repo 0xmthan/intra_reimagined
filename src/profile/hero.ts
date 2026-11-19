@@ -335,7 +335,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         <div class="tl-eta">
           <span class="label">Common Core ETA</span>
           <span class="date">${esc(pace ? fmtIsoDate(pace.eta_end_of_cursus) : goals!.cc_eta!)}</span>
-          <span class="sub">${etaDays !== undefined ? `${etaDays} days` : ''}${pace?.end_of_cursus_max_deadline ? ` · max <b class="max" data-tip="Pace 24 max deadline">${fmtIsoDate(pace.end_of_cursus_max_deadline)}</b>` : ''}</span>
+          <span class="sub">${etaDays !== undefined ? `${etaDays} days` : ''}${pace?.end_of_cursus_max_deadline ? ` · max <b class="max" data-tip="Pace 24 max deadline · ${Math.ceil((new Date(pace.end_of_cursus_max_deadline).getTime() - Date.now()) / DAY_MS)} days">${fmtIsoDate(pace.end_of_cursus_max_deadline)}</b>` : ''}</span>
         </div>
         <div class="tl-scroll"><div class="tl-track">${pace ? paceTrackHtml(pace, { yearMarks: true }) : '<div class="skeleton tall"></div>'}</div></div>
       </section>` : ''}

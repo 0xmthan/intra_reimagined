@@ -4,10 +4,10 @@
    then tags any other light box / dark text it finds with .ir-dk-* classes, styled at the end. */
 
 html.ir-dark {
-  --ir-bg: #15161b;
-  --ir-surface: #1d1f26;
-  --ir-surface-2: #252832;
-  --ir-surface-3: #2e3240;
+  --ir-bg: #0b0d11; /* the profile header's bottom, so the page continues it */
+  --ir-surface: #14171d;
+  --ir-surface-2: #1b1f27;
+  --ir-surface-3: #252a35;
   --ir-border: rgba(255, 255, 255, 0.09);
   --ir-text: #e2e4ea;
   --ir-muted: #a1a7b5;
@@ -125,4 +125,16 @@ html.ir-dark .ir-dk-muted {
 }
 html.ir-dark .ir-dk-border {
   border-color: var(--ir-border) !important;
+}
+
+/* The box intra keeps the profile banner (our header) and announcements in: no card of its own,
+   so the header's dark bottom flows straight into the page background. */
+/* The header fades out into this exact color at its bottom (hero.css reads --ir-fade). */
+html.ir-dark #ir-hero {
+  --ir-fade: var(--ir-bg);
+}
+html.ir-dark.ir-hero-on .container-item.profile-item {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
