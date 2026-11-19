@@ -102,18 +102,27 @@ export function setSidebarTools(on: boolean) {
   if (!media) {
     media = matchMedia(DESKTOP);
     media.addEventListener('change', sync);
-    document.addEventListener('keydown', onShortcut);
   }
   sync();
 }
 
-/** ⌘K / Ctrl+K anywhere, or "/" when not typing, opens search (only while the top bar is gone). */
+/**
+ * ⌘K / Ctrl+K opens our search, always: Firefox would otherwise focus its own search bar.
+ * Listens from document_start in the capture phase, so neither an early press (page still
+ * loading) nor intra's own key handlers can let it through. "/" (when not typing) opens it too,
+ * while the top bar is gone.
+ */
+export function initSearchShortcut() {
+  window.addEventListener('keydown', onShortcut, true);
+}
+
 function onShortcut(e: KeyboardEvent) {
-  if (!document.getElementById(TOOLS_ID)) return;
-  const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
   const cmdK = e.key.toLowerCase() === 'k' && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey;
-  if (cmdK || (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey)) {
-    e.preventDefault();
-    openSearch();
-  }
+  const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+  const slash = e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && !!document.getElementById(TOOLS_ID);
+  if (!cmdK && !slash) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (document.body) openSearch();
+  else document.addEventListener('DOMContentLoaded', () => openSearch(), { once: true });
 }

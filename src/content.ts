@@ -11,7 +11,7 @@ import { V2_ORIGIN, V3_ORIGIN } from './pace/types';
 import { initTheme } from './theme';
 import { pinLogo } from './logo';
 import { mountHero } from './profile/hero';
-import { setSidebarTools } from './topbar';
+import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
 import { initNews } from './news';
@@ -64,6 +64,7 @@ async function main() {
 
   injectStyles();
   initTheme();
+  initSearchShortcut();
   // Our header and sidebar tools need the parsed page; hide what they replace until then.
   if (location.origin === V2_ORIGIN && isProfilePage()) document.documentElement.classList.add(HERO_PENDING);
   document.documentElement.classList.add(TOOLS_PENDING);
