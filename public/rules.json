@@ -5,14 +5,50 @@
     "action": {
       "type": "modifyHeaders",
       "responseHeaders": [
-        { "header": "x-frame-options", "operation": "remove" },
-        { "header": "content-security-policy", "operation": "remove" }
+        {
+          "header": "x-frame-options",
+          "operation": "remove"
+        },
+        {
+          "header": "content-security-policy",
+          "operation": "remove"
+        }
       ]
     },
     "condition": {
       "urlFilter": "|https://meta.intra.42.fr/clusters",
-      "resourceTypes": ["sub_frame"],
-      "initiatorDomains": ["intra.42.fr"]
+      "resourceTypes": [
+        "sub_frame"
+      ],
+      "initiatorDomains": [
+        "intra.42.fr"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "x-frame-options",
+          "operation": "remove"
+        },
+        {
+          "header": "content-security-policy",
+          "operation": "remove"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "|https://profile.intra.42.fr/slots",
+      "resourceTypes": [
+        "sub_frame"
+      ],
+      "initiatorDomains": [
+        "intra.42.fr"
+      ]
     }
   }
 ]

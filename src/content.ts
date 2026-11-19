@@ -17,6 +17,7 @@ import { mergeSkillsAndExpertises } from './profile/skills';
 import { tidyEvaluations } from './profile/evaluations';
 import { layoutHome } from './profile/home-grid';
 import { reworkLogtime } from './profile/logtime';
+import { reworkAgenda } from './profile/agenda';
 import { renderFamilyTree } from './profile/family';
 import { layoutUserPage } from './profile/user-page';
 import { notifyUpdate } from './update';
@@ -24,6 +25,8 @@ import { initSearchShortcut, setSidebarTools } from './topbar';
 import { tidySidebar } from './sidebar-links';
 import { isOwnProfilePath, rememberLogin, rememberedLogin } from './me';
 import { addClustersButton, initEmbed, isEmbedFrame } from './clusters';
+import { interceptSlotLinks, reworkSlotsPage } from './slots';
+import { initUserTooltips } from './user-tooltip';
 import { initNews } from './news';
 import { NEEDS_LOGIN, connect, consumeAuthRedirect, getToken, loginHint, setLoginHint } from './auth';
 import { ask, dismiss, dismissed, loginPill } from './gate';
@@ -58,6 +61,7 @@ async function main() {
     initTheme();
     await domReady();
     initEmbed();
+    reworkSlotsPage();
     return;
   }
   if (window !== window.top || document.getElementById(STYLE_ID)) return;
@@ -94,6 +98,8 @@ async function main() {
   pinLogo();
   tidySidebar();
   addClustersButton();
+  interceptSlotLinks();
+  initUserTooltips();
   addSettingsButton();
   setSidebarTools(true);
   document.documentElement.classList.remove(TOOLS_PENDING);
@@ -105,6 +111,7 @@ async function main() {
   }
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
+  reworkSlotsPage();
   if (location.origin === V2_ORIGIN && location.pathname === '/') {
     addHomePatronages();
     addFinishedProjects();
@@ -112,6 +119,7 @@ async function main() {
     tidyEvaluations();
     layoutHome(); // after the cards above are merged and renamed
     reworkLogtime();
+    reworkAgenda();
   }
   notifyUpdate();
 }
