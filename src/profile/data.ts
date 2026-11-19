@@ -3,6 +3,7 @@
 // Interactive bits (title picker, cursus select, "give points") keep a handle on intra's original
 // element so we can trigger intra's own behaviour instead of re-implementing it.
 import { myLogin } from '../me';
+import { dropToken, getToken } from '../auth';
 
 export interface TitleOption {
   label: string;
@@ -224,6 +225,25 @@ export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefin
 /** Our API server (see server/), set at build time with VITE_IR_API; unset = not used. */
 const IR_API = (import.meta.env.VITE_IR_API as string | undefined)?.replace(/\/+$/, '');
 
+/** GET from our server with the login-with-42 token; 'auth' = not signed in (or signed out). */
+async function irGet<T>(path: string): Promise<T | 'auth' | undefined> {
+  const token = await getToken();
+  if (!token) return 'auth';
+  try {
+    const res = await fetch(`${IR_API}${path}`, {
+      credentials: 'omit',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+      dropToken();
+      return 'auth';
+    }
+    return res.ok ? ((await res.json()) as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Official piscine month from 42's API via our server, e.g. "Nov 2025". */
 export interface ApiPiscine {
   label: string; // "Nov 2025"
@@ -234,12 +254,11 @@ export interface ApiPiscine {
 
 export async function fetchPiscine(login: string): Promise<ApiPiscine | undefined> {
   if (!IR_API) return undefined;
-  const j = await getJSON<{ month: string | null; year: string | null; campusId?: number | null }>(
+  const j = await irGet<{ month: string | null; year: string | null; campusId?: number | null }>(
     // ?v= busts browser caches of older response shapes (bump it when the response changes).
-    `${IR_API}/v1/users/${encodeURIComponent(login)}/piscine?v=2`,
-    false,
+    `/v1/users/${encodeURIComponent(login)}/piscine?v=2`,
   );
-  if (!j?.month || !j.year) return undefined;
+  if (!j || j === 'auth' || !j.month || !j.year) return undefined;
   const date = new Date(`${j.month} 1, ${j.year}`);
   if (isNaN(date.getTime())) return undefined;
   return { label: date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }), month: j.month, year: j.year, campusId: j.campusId ?? null };
@@ -261,8 +280,8 @@ export interface PiscineStudent {
 export async function fetchPiscineStudents(p: ApiPiscine): Promise<PiscineStudent[] | undefined> {
   if (!IR_API || p.campusId === null) return undefined;
   // ?v= busts browser caches of older response shapes (bump it when the response changes).
-  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}?v=3`, false);
-  return j?.students;
+  const j = await irGet<{ students: PiscineStudent[] }>(`/v1/piscines/${p.campusId}/${p.year}/${p.month}?v=3`);
+  return j && j !== 'auth' ? j.students : undefined;
 }
 
 /**
@@ -288,10 +307,11 @@ export interface EvalStats {
 }
 
 /** What this student did as an evaluator (and, with `viewer`, how often you two met), via our server. */
-export async function fetchEvalStats(login: string, viewer?: string): Promise<EvalStats | undefined> {
+export async function fetchEvalStats(login: string, viewer?: string): Promise<EvalStats | 'auth' | undefined> {
   if (!IR_API) return undefined;
   const q = viewer && viewer !== login ? `?with=${encodeURIComponent(viewer)}` : '';
-  const j = await getJSON<EvalStats>(`${IR_API}/v1/users/${encodeURIComponent(login)}/evaluations${q}`, false);
+  const j = await irGet<EvalStats>(`/v1/users/${encodeURIComponent(login)}/evaluations${q}`);
+  if (j === 'auth') return j;
   return j && typeof j.total === 'number'
     ? { total: j.total, failed: j.failed, outstanding: j.outstanding, together: j.together }
     : undefined;

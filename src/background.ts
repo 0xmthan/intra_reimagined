@@ -9,6 +9,7 @@ interface UpdateApi {
     onInstalled: { addListener(cb: () => void): void };
     onUpdateAvailable: { addListener(cb: () => void): void };
   };
+  storage: { local: { set(items: Record<string, unknown>): Promise<void> } };
   alarms: {
     create(name: string, info: { delayInMinutes?: number; periodInMinutes: number }): void;
     onAlarm: { addListener(cb: (alarm: { name: string }) => void): void };
@@ -25,11 +26,18 @@ const check = () => {
 
 const schedule = () => api.alarms.create(ALARM, { delayInMinutes: 1, periodInMinutes: 60 });
 
+// A new id per browser start: popups dismissed with "Skip" / "Continue" come back after a restart (gate.ts).
+const newSession = () => api.storage.local.set({ browserSession: crypto.randomUUID() }).catch(() => {});
+
 api.runtime.onStartup.addListener(() => {
+  newSession();
   schedule();
   check();
 });
-api.runtime.onInstalled.addListener(schedule);
+api.runtime.onInstalled.addListener(() => {
+  newSession();
+  schedule();
+});
 api.alarms.onAlarm.addListener((alarm) => alarm.name === ALARM && check());
 
 // A new version is downloaded: switch to it now. Open intra tabs pick it up on their next load.

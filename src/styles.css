@@ -272,6 +272,16 @@ html.ir-hero-on .profile-item .profile-banner,
 html.ir-hero-on #ir-pace-timeline {
   display: none !important;
 }
+/* Until the header mounts (after the page has parsed), keep intra's banner from flashing. */
+html.ir-hero-pending .profile-item .profile-banner {
+  visibility: hidden !important;
+}
+/* Same for intra's top bar until topbar.ts has moved its contents into the sidebar (desktop only). */
+@media (min-width: 769px) {
+  html.ir-topbar-pending .main-navbar {
+    display: none !important;
+  }
+}
 
 /* ---------- no top bar: search, notifications, help and account live in the sidebar (topbar.ts) ---------- */
 html.ir-no-topbar .main-navbar {

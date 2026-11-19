@@ -11,6 +11,7 @@ import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
 import { myLogin } from '../me';
 import { openPiscineList } from './piscine-list';
+import { connect } from '../auth';
 import { setHTML } from '../html';
 
 export const HERO_ID = 'ir-hero';
@@ -30,8 +31,9 @@ interface State {
   piscine?: ApiPiscine;
   /** Fallback label found on the full profile page (your home page doesn't list piscine projects). */
   piscineLabel?: string;
-  /** As-evaluator stats from our API server; null = unavailable (no server / request failed). */
-  evals?: EvalStats | null;
+  /** As-evaluator stats from our API server; null = unavailable (no server / request failed),
+   * 'auth' = needs login with 42 first. */
+  evals?: EvalStats | null | 'auth';
   /** Attendance from raw logtime, when goals have none. */
   logWeeks?: Week[];
   pace?: PaceProfile;
@@ -104,8 +106,9 @@ export function mountHero() {
   state.data.cursus.el?.addEventListener('change', () => setTimeout(followSelect, 50));
 
 
-  // Piscine chip → everyone from that piscine.
+  // Piscine chip → everyone from that piscine; "Connect" → login with 42 for our server.
   hero.addEventListener('click', (e) => {
+    if ((e.target as Element).closest('[data-act="connect"]')) return void connect();
     if (!(e.target as Element).closest('[data-act="piscine"]') || !state.piscine) return;
     openPiscineList(state.piscine, { campus: state.data.campus, current: state.data.login });
   });
@@ -216,8 +219,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const score = c?.score;
   const rank = c?.rank;
   const coalHref = d.coalition && d.coalition.name === coalName ? d.coalition.href : undefined;
-  const passed = evals ? evals.total - evals.failed : 0;
-  const failRate = evals?.total ? Math.round((evals.failed / evals.total) * 100) : 0;
+  const ev = evals && evals !== 'auth' ? evals : undefined;
+  const passed = ev ? ev.total - ev.failed : 0;
+  const failRate = ev?.total ? Math.round((ev.failed / ev.total) * 100) : 0;
   const etaDays = goals?.cc_eta ? Math.ceil(((parseDmy(goals.cc_eta) ?? 0) - Date.now()) / DAY_MS) : undefined;
 
   setHTML(hero, `
@@ -294,7 +298,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         </div>
         <div class="card">
           <h3>${icon('eval')} As evaluator</h3>
-          ${evals ? `<div class="pair">
+          ${evals === 'auth' ? '<button class="chip btn" data-act="connect">Connect with 42</button><div class="sub">to see evaluator stats and your piscine</div>' : evals ? `<div class="pair">
             <div><div class="big">${evals.total}</div><div class="sub">evaluations</div></div>
             ${evals.total ? `<div class="ev">
               <div class="evbar" data-tip="${passed} passed · ${evals.failed} failed (${failRate}% fail rate)">
