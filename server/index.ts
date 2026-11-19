@@ -4,12 +4,14 @@
 //   GET /v1/users/:login/piscine  →  { login, month: "november", year: "2025" }
 //   GET /health                   →  { ok: true }
 //
-// Run: node server/index.ts   (Node 23.6+ runs TypeScript directly). Config: see server/.env.example.
+// Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
+// Run: node index.ts (Node 23.6+ runs TypeScript directly), or docker compose up. Config: .env.example.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { FtApi, FtApiError } from './ft-api.ts';
 import { TtlCache } from './cache.ts';
 import { RateLimiter } from './rate-limit.ts';
+import { Db, type Piscine } from './db.ts';
 
 const envFile = new URL('.env', import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -29,24 +31,31 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://profile.intra.4
 
 const DAY = 86_400_000;
 const api = new FtApi(FT_UID, FT_SECRET);
-const piscineCache = new TtlCache<Piscine | null>(5000); // a piscine date never changes
+const piscineCache = new TtlCache<Piscine | null>(5000); // hot logins, in front of Postgres
 const limiter = new RateLimiter(60, 60_000); // per client IP: 60 requests / minute
 
-interface Piscine {
-  login: string;
-  month: string | null;
-  year: string | null;
-}
+const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefined;
+if (db) await db.init();
+else console.warn('No DATABASE_URL: piscines are only cached in memory.');
 
 async function getPiscine(login: string): Promise<Piscine | null> {
   const hit = piscineCache.get(login);
   if (hit !== undefined) return hit;
+
+  const stored = await db?.getPiscine(login);
+  if (stored) {
+    piscineCache.set(login, stored, 30 * DAY);
+    return stored;
+  }
+
   try {
     const u = await api.get<{ login: string; pool_month: string | null; pool_year: string | null }>(
       `/v2/users/${encodeURIComponent(login)}`,
     );
     const value = { login: u.login, month: u.pool_month, year: u.pool_year };
     piscineCache.set(login, value, 30 * DAY);
+    if (u.login !== login) piscineCache.set(u.login, value, 30 * DAY);
+    await db?.savePiscine(value);
     return value;
   } catch (e) {
     if (e instanceof FtApiError && e.status === 404) {
@@ -70,8 +79,11 @@ function cors(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+// Behind Cloudflare (tunnel) the real client is in CF-Connecting-IP; other proxies set X-Forwarded-For.
 const clientIp = (req: IncomingMessage) =>
-  (process.env.TRUST_PROXY ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '') ||
+  (process.env.TRUST_PROXY
+    ? String(req.headers['cf-connecting-ip'] ?? '') || String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()
+    : '') ||
   req.socket.remoteAddress ||
   'unknown';
 
@@ -84,7 +96,14 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
   if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
-  if (url.pathname === '/health') return send(res, 200, { ok: true });
+  if (url.pathname === '/health') {
+    try {
+      await db?.ping();
+      return send(res, 200, { ok: true });
+    } catch {
+      return send(res, 503, { ok: false, error: 'database unreachable' });
+    }
+  }
 
   const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/piscine$/i);
   if (!m) return send(res, 404, { error: 'not found' });
@@ -103,3 +122,11 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => console.log(`Intra Reimagined API on http://${HOST}:${PORT}`));
+
+// docker stop sends SIGTERM: finish in-flight requests, close the pool, exit.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    server.close(() => db?.close().finally(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 8000).unref();
+  });
+}

@@ -61,6 +61,7 @@ kbd {
 }
 .results {
   overflow-y: auto;
+  overscroll-behavior: contain; /* scrolling the results never scrolls the page */
   padding: 6px 8px 10px;
 }
 h4 {

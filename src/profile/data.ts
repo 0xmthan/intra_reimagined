@@ -152,8 +152,8 @@ export function readHero(): HeroData | undefined {
  * e.g. "2023-01-16 05:14:04 +0300"). The earliest C Piscine project falls in the piscine's
  * first week, which gives its month. Falls back to any piscine-like cursus.
  */
-function readPiscine(): HeroData['piscine'] {
-  const items = [...document.querySelectorAll<HTMLElement>('.project-item[data-cursus]')];
+function readPiscine(root: ParentNode = document): HeroData['piscine'] {
+  const items = [...root.querySelectorAll<HTMLElement>('.project-item[data-cursus]')];
   for (const re of [/(^|\s)c-piscine/, /piscine/]) {
     const dates = items
       .filter((el) => re.test(el.dataset.cursus ?? ''))
@@ -227,4 +227,18 @@ export async function fetchPiscine(login: string): Promise<string | undefined> {
   if (!j?.month || !j.year) return undefined;
   const date = new Date(`${j.month} 1, ${j.year}`);
   return isNaN(date.getTime()) ? undefined : date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+}
+
+/**
+ * Your home page (/) only lists a couple of recent projects, so the piscine ones may be missing;
+ * the full profile page (/users/<login>) has them all.
+ */
+export async function fetchPiscineFromProfile(login: string): Promise<HeroData['piscine']> {
+  try {
+    const res = await fetch(`/users/${encodeURIComponent(login)}`, { credentials: 'include', headers: { Accept: 'text/html' } });
+    if (!res.ok) return undefined;
+    return readPiscine(new DOMParser().parseFromString(await res.text(), 'text/html'));
+  } catch {
+    return undefined;
+  }
 }

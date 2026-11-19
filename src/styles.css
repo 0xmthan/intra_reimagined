@@ -473,3 +473,18 @@ html.ir-no-topbar .notifications-container {
 #ir-palette[hidden] {
   display: none !important;
 }
+
+/* ---------- E-learning, Forum and Companies live in Meta's menu (sidebar-links.ts) ---------- */
+.main-left-navbar li.ir-moved {
+  display: none !important;
+}
+.ir-meta-link [class^='icon-'] {
+  font-size: 15px;
+  vertical-align: -2px;
+}
+
+/* Page can't scroll while the search palette is open (search.ts). */
+html.ir-scroll-lock,
+html.ir-scroll-lock body {
+  overflow: hidden !important;
+}

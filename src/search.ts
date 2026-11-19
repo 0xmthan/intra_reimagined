@@ -63,6 +63,7 @@ let host: HTMLElement | undefined;
 export function openSearch() {
   if (!host) build();
   host!.hidden = false;
+  document.documentElement.classList.add('ir-scroll-lock');
   const input = host!.shadowRoot!.querySelector('input')!;
   input.select();
   input.focus();
@@ -101,6 +102,7 @@ function build() {
 
   const close = () => {
     host!.hidden = true;
+    document.documentElement.classList.remove('ir-scroll-lock');
     ctrl?.abort();
   };
 

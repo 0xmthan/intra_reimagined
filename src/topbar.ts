@@ -64,6 +64,11 @@ function mount() {
   if (bell) {
     const slot = tools.querySelector('.ir-bell')!;
     move(bell, slot);
+    // Its href is "#", which scrolls to the top; intra's own click handler still opens the panel.
+    if (!bell.hasAttribute('data-ir-noscroll')) {
+      bell.setAttribute('data-ir-noscroll', '');
+      bell.addEventListener('click', (e) => e.preventDefault());
+    }
     if (!bell.querySelector('.ir-bell-icon')) {
       const icon = document.createElement('span');
       icon.className = 'ir-bell-icon';

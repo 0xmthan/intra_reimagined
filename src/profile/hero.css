@@ -282,41 +282,32 @@ select {
   color: var(--coal);
 }
 
-.menu {
+/* Native <select> laid over the title: the page shows our text, the browser shows its own list. */
+.title-btn select {
   position: absolute;
-  z-index: 20;
-  top: 100%;
-  left: -10px;
-  margin-top: 6px;
-  padding: 6px;
-  min-width: 300px;
-  max-height: 320px;
-  overflow-y: auto;
-  border-radius: 12px;
-  background: rgba(20, 22, 28, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-  display: none;
-}
-
-.menu.open {
-  display: grid;
-}
-
-.menu button {
-  text-align: left;
+  inset: 0;
+  width: 100%;
+  margin: 0;
   border: 0;
+  /* Same padding as the visible title (the select sits inside its border), so the
+     native list (which lines its selected item up with the select's text) opens right on it. */
+  padding: 6px 12px 6px 10px;
+  font: inherit;
+  appearance: none;
+  -moz-appearance: none;
   background: none;
-  padding: 8px 10px;
-  border-radius: 8px;
+  opacity: 0;
   cursor: pointer;
-  color: var(--muted);
-  font-size: 15px;
+  color-scheme: dark;
 }
 
-.menu button:hover,
-.menu button.on {
-  background: rgba(255, 255, 255, 0.08);
+.title-btn.pick {
+  position: relative;
+}
+
+.title-btn.pick:focus-within {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text);
 }
 
@@ -368,8 +359,13 @@ select {
   -moz-appearance: none;
 }
 
-.chip select option {
-  color: #000;
+/* Native dropdown lists: dark like the header. */
+select {
+  color-scheme: dark;
+}
+select option {
+  background: #1d1f26;
+  color: #e8eaf0;
 }
 
 .actions {

@@ -13,6 +13,7 @@ import { pinLogo } from './logo';
 import { mountHero, unmountHero } from './profile/hero';
 import { getSettings, onSettingsChange } from './store';
 import { setSidebarTools } from './topbar';
+import { tidySidebar } from './sidebar-links';
 
 const STYLE_ID = 'intra-reimagined-styles';
 
@@ -43,6 +44,7 @@ async function main() {
 
   await domReady();
   pinLogo();
+  tidySidebar();
   addSettingsButton();
   initSidebarTools();
   if (location.origin === V2_ORIGIN && isProfilePage()) initProfileHeader();

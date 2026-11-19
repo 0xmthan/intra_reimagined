@@ -5,7 +5,7 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { fetchCoalition, fetchGoals, fetchLogtimeWeeks, fetchPiscine, readHero, type Goals, type HeroData, type Week } from './data';
+import { fetchCoalition, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
@@ -71,7 +71,8 @@ export function mountHero() {
     }
   };
   refresh();
-  fetchPiscine(data.login).then((piscine) => {
+  fetchPiscine(data.login).then(async (piscine) => {
+    piscine ??= data.piscine ? undefined : (await fetchPiscineFromProfile(data.login))?.label;
     if (!piscine) return;
     state.piscine = piscine;
     paint();
@@ -93,8 +94,6 @@ export function mountHero() {
   else window.addEventListener('load', followSelect, { once: true });
   state.data.cursus.el?.addEventListener('change', () => setTimeout(followSelect, 50));
 
-  // Clicking anywhere else closes the title menu.
-  document.addEventListener('click', () => hero.querySelector('.menu')?.classList.remove('open'));
 
   // Cursus picker drives intra's own select, then we re-read what intra updated.
   hero.addEventListener('change', (e) => {
@@ -206,8 +205,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             ${d.badge ? `<span class="badge" style="${d.badge.background ? `--badge-bg:url('${esc(d.badge.background)}')` : ''}">${esc(d.badge.text)}</span>` : ''}
           </div>
           <div class="title-wrap">
-            <button class="title-btn ${d.own && d.titles.length ? 'pick' : ''}" data-act="titles">${esc(d.title)}${d.own && d.titles.length ? '<span class="caret">▾</span>' : ''}</button>
-            ${d.own && d.titles.length ? `<div class="menu">${d.titles.map((t, i) => `<button class="${t.active ? 'on' : ''}" data-title="${i}">${esc(t.label)}</button>`).join('')}</div>` : ''}
+            ${d.own && d.titles.length
+              ? `<label class="title-btn pick"><span class="title-text">${esc(d.title)}</span><span class="caret">▾</span><select data-title aria-label="Title">${d.titles.map((t, i) => `<option value="${i}" ${t.active ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>`
+              : `<span class="title-btn">${esc(d.title)}</span>`}
           </div>
           <div class="chips">
             <button class="chip btn" data-act="copy" data-tip="Copy login">${icon('copy')} ${esc(d.login)}</button>
@@ -298,22 +298,14 @@ function bind(hero: HTMLElement, d: HeroData) {
   for (const el of hero.querySelectorAll<HTMLElement>('[data-tip]')) addTooltip(el, el.dataset.tip!, { placement: 'bottom', style: 'v3' });
   bindPaceTooltips(hero);
 
-  const menu = hero.querySelector<HTMLElement>('.menu');
-  hero.querySelector('[data-act="titles"]')?.addEventListener('click', (e) => {
-    if (!menu) return;
-    e.stopPropagation();
-    menu.classList.toggle('open');
-  });
-  menu?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-title]');
-    if (!btn) return;
-    const opt = d.titles[Number(btn.dataset.title)];
+  // Native title picker (a transparent <select> over the title text).
+  hero.querySelector<HTMLSelectElement>('select[data-title]')?.addEventListener('change', (e) => {
+    const opt = d.titles[Number((e.target as HTMLSelectElement).value)];
+    if (!opt) return;
     opt.el.click(); // intra's own remote link selects the title server-side
     d.titles.forEach((t) => (t.active = t === opt));
     d.title = opt.label;
-    hero.querySelector('.title-btn')!.firstChild!.textContent = opt.label;
-    menu.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === btn));
-    menu.classList.remove('open');
+    hero.querySelector('.title-text')!.textContent = opt.label;
   });
 
   hero.querySelector('[data-act="copy"]')?.addEventListener('click', () => navigator.clipboard?.writeText(d.login));
