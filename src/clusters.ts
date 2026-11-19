@@ -1,6 +1,6 @@
 // Clusters: a sidebar icon that opens meta's clusters map in a window over the current page,
-// with a button to open it as its own page. The map page is framed (rules.json lets just that page be framed
-// by intra) and runs in "embed" mode (see initEmbed): no intra sidebar/top bar, and following a
+// with a button to open it as its own page. The map page is framed (the background lets the tab frame it,
+// background.ts) and runs in "embed" mode (see initEmbed): no intra sidebar/top bar, and following a
 // link (e.g. a student's seat) loads that page in the whole tab, which also closes the window.
 // The same window (openFramePopup) shows other intra pages too, like Manage slots (slots.ts).
 import css from './clusters.css?inline';
@@ -31,6 +31,13 @@ export function addClustersButton() {
     openClusters();
   });
 }
+
+type Runtime = { runtime: { sendMessage(msg: unknown): Promise<unknown> } };
+const runtime = ((globalThis as { browser?: Runtime }).browser ?? (globalThis as { chrome?: Runtime }).chrome)?.runtime;
+
+/** Asks the background to let this tab frame intra's clusters and slots pages. */
+const allowFrames = () =>
+  Promise.race([runtime?.sendMessage({ type: 'ir-allow-frames' }).catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
 
 let host: HTMLElement | undefined;
 let onKey: ((e: KeyboardEvent) => void) | undefined;
@@ -91,7 +98,10 @@ export function openFramePopup(o: FramePopup) {
   root.querySelector<HTMLAnchorElement>('.open')!.href = o.url;
   const frame = root.querySelector('iframe')!;
   frame.title = o.title;
-  frame.src = src.href;
+  // The background lets this tab frame the page first (background.ts), then it loads.
+  void allowFrames().then(() => {
+    if (frame.isConnected) frame.src = src.href;
+  });
   document.body.appendChild(host);
   document.documentElement.classList.add('ir-scroll-lock');
 

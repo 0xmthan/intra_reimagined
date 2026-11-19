@@ -42,3 +42,50 @@ api.alarms.onAlarm.addListener((alarm) => alarm.name === ALARM && check());
 
 // A new version is downloaded: switch to it now. Open intra tabs pick it up on their next load.
 api.runtime.onUpdateAvailable.addListener(() => api.runtime.reload());
+
+// ---------- framing intra pages in our windows (clusters.ts: Clusters, Manage slots) ----------
+// meta's clusters map and the slots page refuse to be framed by other pages (X-Frame-Options).
+// When a tab opens one of our windows it asks here, and that tab alone may frame them. (A static
+// rule keyed on the initiator doesn't work: the frame is made by our content script, so Firefox
+// sees the extension, not intra, as its initiator.)
+interface FrameApi {
+  runtime: { onMessage: { addListener(cb: (msg: unknown, sender: { tab?: { id?: number } }) => Promise<unknown> | undefined): void } };
+  tabs: { onRemoved: { addListener(cb: (tabId: number) => void): void } };
+  declarativeNetRequest: {
+    updateSessionRules(o: { removeRuleIds?: number[]; addRules?: unknown[] }): Promise<void>;
+  };
+}
+const frameApi = api as unknown as FrameApi;
+
+function allowFrames(tabId: number) {
+  return frameApi.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [tabId],
+    addRules: [
+      {
+        id: tabId,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          responseHeaders: [
+            { header: 'x-frame-options', operation: 'remove' },
+            { header: 'content-security-policy', operation: 'remove' },
+          ],
+        },
+        condition: {
+          regexFilter: '^https://(meta\\.intra\\.42\\.fr/clusters|profile\\.intra\\.42\\.fr/slots)',
+          resourceTypes: ['sub_frame'],
+          tabIds: [tabId],
+        },
+      },
+    ],
+  });
+}
+
+frameApi.runtime.onMessage.addListener((msg, sender) => {
+  const tabId = sender.tab?.id;
+  if ((msg as { type?: string })?.type !== 'ir-allow-frames' || tabId == null || tabId < 1) return undefined;
+  return allowFrames(tabId).then(() => true, () => false);
+});
+frameApi.tabs.onRemoved.addListener((tabId) => {
+  if (tabId >= 1) frameApi.declarativeNetRequest.updateSessionRules({ removeRuleIds: [tabId] }).catch(() => {});
+});
