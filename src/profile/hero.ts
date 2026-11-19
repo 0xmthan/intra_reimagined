@@ -5,18 +5,17 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { fetchCoalition, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type Goals, type HeroData, type Week } from './data';
+import { fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type EvalStats, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
+import { openPiscineList } from './piscine-list';
 import { setHTML } from '../html';
 
 export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
 const DAY_MS = 86_400_000;
 
-// Placeholder until we wire a real source (shown with a "sample data" tag).
-const SAMPLE_EVALS = { total: 142, failed: 31, outstanding: 18 };
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -26,8 +25,12 @@ interface State {
   goals?: Goals;
   /** Set once the goals request finished, so cards can tell "loading" from "nothing to show". */
   goalsLoaded?: boolean;
-  /** Official piscine month from our API server, preferred over the one guessed from projects. */
-  piscine?: string;
+  /** Official piscine from our API server, preferred over the month guessed from projects. */
+  piscine?: ApiPiscine;
+  /** Fallback label found on the full profile page (your home page doesn't list piscine projects). */
+  piscineLabel?: string;
+  /** As-evaluator stats from our API server; null = unavailable (no server / request failed). */
+  evals?: EvalStats | null;
   /** Attendance from raw logtime, when goals have none. */
   logWeeks?: Week[];
   pace?: PaceProfile;
@@ -72,9 +75,12 @@ export function mountHero() {
   };
   refresh();
   fetchPiscine(data.login).then(async (piscine) => {
-    piscine ??= data.piscine ? undefined : (await fetchPiscineFromProfile(data.login))?.label;
-    if (!piscine) return;
-    state.piscine = piscine;
+    if (piscine) state.piscine = piscine;
+    else if (!data.piscine) state.piscineLabel = (await fetchPiscineFromProfile(data.login))?.label;
+    if (state.piscine || state.piscineLabel) paint();
+  });
+  fetchEvalStats(data.login).then((evals) => {
+    state.evals = evals ?? null;
     paint();
   });
   loadPace(data.login, (pace) => {
@@ -94,6 +100,12 @@ export function mountHero() {
   else window.addEventListener('load', followSelect, { once: true });
   state.data.cursus.el?.addEventListener('change', () => setTimeout(followSelect, 50));
 
+
+  // Piscine chip → everyone from that piscine.
+  hero.addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('[data-act="piscine"]') || !state.piscine) return;
+    openPiscineList(state.piscine, { campus: state.data.campus, current: state.data.login });
+  });
 
   // Cursus picker drives intra's own select, then we re-read what intra updated.
   hero.addEventListener('change', (e) => {
@@ -152,7 +164,7 @@ function spanHtml(fromMs: number, toMs: number) {
   return `${days}<small> days</small>`;
 }
 
-function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine }: State) {
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals }: State) {
   const color = coal?.color ?? d.coalition?.color ?? '#00babc';
   hero.style.setProperty('--coal', color);
   hero.style.setProperty('--cover', d.cover ? `url("${d.cover}")` : 'none');
@@ -178,7 +190,8 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const coalName = d.coalition?.name;
   const score = coal?.score ?? d.coalition?.score;
   const rank = coal?.rank ?? d.coalition?.rank;
-  const failRate = Math.round((SAMPLE_EVALS.failed / SAMPLE_EVALS.total) * 100);
+  const passed = evals ? evals.total - evals.failed : 0;
+  const failRate = evals?.total ? Math.round((evals.failed / evals.total) * 100) : 0;
   const etaDays = goals?.cc_eta ? Math.ceil(((parseDmy(goals.cc_eta) ?? 0) - Date.now()) / DAY_MS) : undefined;
 
   setHTML(hero, `
@@ -212,7 +225,11 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           <div class="chips">
             <button class="chip btn" data-act="copy" data-tip="Copy login">${icon('copy')} ${esc(d.login)}</button>
             ${d.grade ? `<span class="chip">${esc(d.grade)}</span>` : ''}
-            ${piscine || d.piscine ? `<span class="chip" data-tip="${piscine ? 'Piscine' : 'C Piscine, from their first piscine project'}">${icon('wave')} Piscine · ${esc(piscine ?? d.piscine!.label)}</span>` : ''}
+            ${piscine?.campusId != null
+              ? `<button class="chip btn" data-act="piscine" data-tip="Piscine · see who was in it">${icon('wave')} ${esc(piscine.label)}</button>`
+              : piscine || piscineLabel || d.piscine
+                ? `<span class="chip" data-tip="Piscine">${icon('wave')} ${esc(piscine?.label ?? piscineLabel ?? d.piscine!.label)}</span>`
+                : ''}
             ${d.cursus.options.length > 1
               ? `<label class="chip btn"><select data-cursus>${d.cursus.options.map((o) => `<option value="${esc(o.value)}" ${o.value === d.cursus.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select> ▾</label>`
               : `<span class="chip">${esc(d.cursus.value)}</span>`}
@@ -250,20 +267,20 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           </div>` : weeksPending ? '<div class="skeleton"></div>' : '<div class="big muted">—</div><div class="sub">No logtime available</div>'}
         </div>
         <div class="card">
-          <h3>${icon('eval')} As evaluator <span class="sample">sample data</span></h3>
-          <div class="pair">
-            <div><div class="big">${SAMPLE_EVALS.total}</div><div class="sub">evaluations</div></div>
-            <div class="ev">
-              <div class="evbar" data-tip="${SAMPLE_EVALS.total - SAMPLE_EVALS.failed} passed · ${SAMPLE_EVALS.failed} failed (${failRate}% fail rate)">
-                <span class="pass" style="flex:${SAMPLE_EVALS.total - SAMPLE_EVALS.failed}"></span><span class="fail" style="flex:${SAMPLE_EVALS.failed}"></span>
+          <h3>${icon('eval')} As evaluator</h3>
+          ${evals ? `<div class="pair">
+            <div><div class="big">${evals.total}</div><div class="sub">evaluations</div></div>
+            ${evals.total ? `<div class="ev">
+              <div class="evbar" data-tip="${passed} passed · ${evals.failed} failed (${failRate}% fail rate)">
+                <span class="pass" style="flex:${passed}"></span><span class="fail" style="flex:${evals.failed}"></span>
               </div>
               <div class="evlegend">
-                <span><i class="pass"></i>${SAMPLE_EVALS.total - SAMPLE_EVALS.failed} passed</span>
-                <span><i class="fail"></i>${SAMPLE_EVALS.failed} failed</span>
-                <span class="star" data-tip="Outstanding flags given">★ ${SAMPLE_EVALS.outstanding} outstanding</span>
+                <span><i class="pass"></i>${passed} passed</span>
+                <span><i class="fail"></i>${evals.failed} failed</span>
+                <span class="star" data-tip="Outstanding flags given">★ ${evals.outstanding} outstanding</span>
               </div>
-            </div>
-          </div>
+            </div>` : ''}
+          </div>` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}">
           <h3>${icon(blackhole ? 'hole' : 'flag')} ${absorbed ? 'Blackholed' : blackhole ? 'Blackhole' : 'Next deadline'}</h3>

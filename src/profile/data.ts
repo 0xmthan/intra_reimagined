@@ -221,12 +221,37 @@ export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefin
 const IR_API = (import.meta.env.VITE_IR_API as string | undefined)?.replace(/\/+$/, '');
 
 /** Official piscine month from 42's API via our server, e.g. "Nov 2025". */
-export async function fetchPiscine(login: string): Promise<string | undefined> {
+export interface ApiPiscine {
+  label: string; // "Nov 2025"
+  month: string; // "november"
+  year: string;
+  campusId: number | null;
+}
+
+export async function fetchPiscine(login: string): Promise<ApiPiscine | undefined> {
   if (!IR_API) return undefined;
-  const j = await getJSON<{ month: string | null; year: string | null }>(`${IR_API}/v1/users/${encodeURIComponent(login)}/piscine`, false);
+  const j = await getJSON<{ month: string | null; year: string | null; campusId?: number | null }>(
+    `${IR_API}/v1/users/${encodeURIComponent(login)}/piscine`,
+    false,
+  );
   if (!j?.month || !j.year) return undefined;
   const date = new Date(`${j.month} 1, ${j.year}`);
-  return isNaN(date.getTime()) ? undefined : date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  if (isNaN(date.getTime())) return undefined;
+  return { label: date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }), month: j.month, year: j.year, campusId: j.campusId ?? null };
+}
+
+export interface PiscineStudent {
+  login: string;
+  name: string;
+  image: string | null;
+  active: boolean;
+}
+
+/** Everyone from one piscine (same campus, month and year), via our server. */
+export async function fetchPiscineStudents(p: ApiPiscine): Promise<PiscineStudent[] | undefined> {
+  if (!IR_API || p.campusId === null) return undefined;
+  const j = await getJSON<{ students: PiscineStudent[] }>(`${IR_API}/v1/piscines/${p.campusId}/${p.year}/${p.month}`, false);
+  return j?.students;
 }
 
 /**
@@ -241,4 +266,17 @@ export async function fetchPiscineFromProfile(login: string): Promise<HeroData['
   } catch {
     return undefined;
   }
+}
+
+export interface EvalStats {
+  total: number;
+  failed: number;
+  outstanding: number;
+}
+
+/** What this student did as an evaluator, from 42's API via our server. */
+export async function fetchEvalStats(login: string): Promise<EvalStats | undefined> {
+  if (!IR_API) return undefined;
+  const j = await getJSON<EvalStats>(`${IR_API}/v1/users/${encodeURIComponent(login)}/evaluations`, false);
+  return j && typeof j.total === 'number' ? { total: j.total, failed: j.failed, outstanding: j.outstanding } : undefined;
 }

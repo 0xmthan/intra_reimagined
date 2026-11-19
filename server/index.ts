@@ -1,8 +1,10 @@
 // Intra Reimagined API: a small, dependency-free server between the extension and 42's API.
 // The extension never sees the 42 app secret; it only gets the few fields it shows.
 //
-//   GET /v1/users/:login/piscine  →  { login, month: "november", year: "2025" }
-//   GET /health                   →  { ok: true }
+//   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
+//   GET /v1/users/:login/evaluations  →  { login, total, failed, outstanding, refreshedAt }
+//   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
+//   GET /health                       →  { ok: true }
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
 // Run: node index.ts (Node 23.6+ runs TypeScript directly), or docker compose up. Config: .env.example.
@@ -12,6 +14,8 @@ import { FtApi, FtApiError } from './ft-api.ts';
 import { TtlCache } from './cache.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { Db, type Piscine } from './db.ts';
+import { EvalService } from './evals.ts';
+import { MONTHS, PiscineService } from './piscines.ts';
 
 const envFile = new URL('.env', import.meta.url);
 if (existsSync(envFile)) process.loadEnvFile(envFile);
@@ -36,23 +40,29 @@ const limiter = new RateLimiter(60, 60_000); // per client IP: 60 requests / min
 
 const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefined;
 if (db) await db.init();
-else console.warn('No DATABASE_URL: piscines are only cached in memory.');
+else console.warn('No DATABASE_URL: data is only cached in memory.');
+const evals = new EvalService(api, db);
+const piscines = new PiscineService(api, db);
 
 async function getPiscine(login: string): Promise<Piscine | null> {
   const hit = piscineCache.get(login);
   if (hit !== undefined) return hit;
 
   const stored = await db?.getPiscine(login);
-  if (stored) {
+  if (stored && stored.campusId !== null) {
     piscineCache.set(login, stored, 30 * DAY);
     return stored;
   }
 
   try {
-    const u = await api.get<{ login: string; pool_month: string | null; pool_year: string | null }>(
-      `/v2/users/${encodeURIComponent(login)}`,
-    );
-    const value = { login: u.login, month: u.pool_month, year: u.pool_year };
+    const u = await api.get<{
+      login: string;
+      pool_month: string | null;
+      pool_year: string | null;
+      campus_users?: { campus_id: number; is_primary: boolean }[];
+    }>(`/v2/users/${encodeURIComponent(login)}`);
+    const campusId = u.campus_users?.find((c) => c.is_primary)?.campus_id ?? u.campus_users?.[0]?.campus_id ?? null;
+    const value = { login: u.login, month: u.pool_month, year: u.pool_year, campusId };
     piscineCache.set(login, value, 30 * DAY);
     if (u.login !== login) piscineCache.set(u.login, value, 30 * DAY);
     await db?.savePiscine(value);
@@ -105,17 +115,34 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/piscine$/i);
-  if (!m) return send(res, 404, { error: 'not found' });
+  const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);
+  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations)$/i);
+  if (!m && !(pm && MONTHS.includes(pm[3]))) return send(res, 404, { error: 'not found' });
 
   if (!limiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
 
+  if (pm) {
+    try {
+      const list = await piscines.get(Number(pm[1]), pm[2], pm[3]);
+      return send(res, 200, list, { 'Cache-Control': 'public, max-age=3600' });
+    } catch (e) {
+      console.error(e);
+      return send(res, 502, { error: '42 API unavailable' });
+    }
+  }
+  if (!m) return;
+
+  const login = m[1].toLowerCase();
   try {
-    const piscine = await getPiscine(m[1].toLowerCase());
-    if (!piscine) return send(res, 404, { error: 'unknown login' });
-    // Let the browser cache it too: a piscine date doesn't change.
-    send(res, 200, piscine, { 'Cache-Control': 'public, max-age=86400' });
+    if (m[2] === 'piscine') {
+      const piscine = await getPiscine(login);
+      if (!piscine) return send(res, 404, { error: 'unknown login' });
+      // Let the browser cache it too: a piscine date doesn't change.
+      return send(res, 200, piscine, { 'Cache-Control': 'public, max-age=86400' });
+    }
+    send(res, 200, await evals.get(login), { 'Cache-Control': 'public, max-age=600' });
   } catch (e) {
+    if (e instanceof FtApiError && e.status === 404) return send(res, 404, { error: 'unknown login' });
     console.error(e);
     send(res, 502, { error: '42 API unavailable' });
   }

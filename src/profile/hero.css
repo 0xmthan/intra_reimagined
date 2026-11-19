@@ -551,15 +551,6 @@ select option {
   color: #f5c542;
 }
 
-.sample {
-  margin-left: auto;
-  padding: 1px 7px;
-  border-radius: 6px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: #f5c542;
-  border: 1px dashed rgba(245, 197, 66, 0.5);
-}
 
 .mini-btn {
   position: absolute;
