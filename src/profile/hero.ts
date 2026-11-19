@@ -441,6 +441,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
         </div>
         <div class="card">
           <h3>${icon('eval')} As evaluator</h3>
+          <a class="mini-btn corner" href="https://projects.intra.42.fr/users/${esc(encodeURIComponent(d.login))}/feedbacks" data-tip="Feedbacks logs">Feedbacks</a>
           ${evals === 'auth' ? '<button class="chip btn" data-act="connect">Connect with 42</button><div class="sub">to see evaluator stats and your piscine</div>' : evals ? `<div class="pair">
             <div><div class="big">${evals.total}</div><div class="sub">evaluations</div></div>
             ${evals.total ? `<div class="ev">

@@ -412,17 +412,26 @@ export async function fetchPiscineStudents(p: ApiPiscine): Promise<PiscineStuden
 }
 
 /**
- * Your home page (/) only lists a couple of recent projects, so the piscine ones may be missing;
- * the full profile page (/users/<login>) has them all.
+ * Someone's full profile page (/users/<login>), parsed. Your home page (/) lacks parts of it (all
+ * finished projects, patronages, piscine projects), so home features read them from here. One
+ * fetch per page load, shared by everyone who asks.
  */
-export async function fetchPiscineFromProfile(login: string): Promise<HeroData['piscine']> {
-  try {
-    const res = await fetch(`/users/${encodeURIComponent(login)}`, { credentials: 'include', headers: { Accept: 'text/html' } });
-    if (!res.ok) return undefined;
-    return readPiscine(new DOMParser().parseFromString(await res.text(), 'text/html'));
-  } catch {
-    return undefined;
+const profilePages = new Map<string, Promise<Document | undefined>>();
+export function fetchProfilePage(login: string): Promise<Document | undefined> {
+  let p = profilePages.get(login);
+  if (!p) {
+    p = fetch(`/users/${encodeURIComponent(login)}`, { credentials: 'include', headers: { Accept: 'text/html' } })
+      .then(async (res) => (res.ok ? new DOMParser().parseFromString(await res.text(), 'text/html') : undefined))
+      .catch(() => undefined);
+    profilePages.set(login, p);
   }
+  return p;
+}
+
+/** Your home page (/) only lists a couple of recent projects, so the piscine ones may be missing. */
+export async function fetchPiscineFromProfile(login: string): Promise<HeroData['piscine']> {
+  const doc = await fetchProfilePage(login);
+  return doc ? readPiscine(doc) : undefined;
 }
 
 export interface EvalStats {

@@ -642,6 +642,10 @@ button.icon-btn {
   cursor: pointer;
 }
 
+a.mini-btn {
+  text-decoration: none;
+}
+
 .mini-btn:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.12);

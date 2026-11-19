@@ -12,6 +12,8 @@ import { initTheme } from './theme';
 import { pinLogo } from './logo';
 import { mountHero } from './profile/hero';
 import { addHomePatronages } from './profile/patronages';
+import { addFinishedProjects } from './profile/projects';
+import { mergeSkillsAndExpertises } from './profile/skills';
 import { renderFamilyTree } from './profile/family';
 import { notifyUpdate } from './update';
 import { initSearchShortcut, setSidebarTools } from './topbar';
@@ -86,7 +88,11 @@ async function main() {
   }
   document.documentElement.classList.remove(HERO_PENDING); // mounted, or not happening: show intra's banner again
   if (location.origin === V2_ORIGIN) initNews();
-  if (location.origin === V2_ORIGIN && location.pathname === '/') addHomePatronages();
+  if (location.origin === V2_ORIGIN && location.pathname === '/') {
+    addHomePatronages();
+    addFinishedProjects();
+    mergeSkillsAndExpertises();
+  }
   notifyUpdate();
 }
 

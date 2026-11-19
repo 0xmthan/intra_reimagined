@@ -468,3 +468,71 @@ html.ir-embed .page-content .container-item {
 .ir-news-hidden {
   display: none !important;
 }
+
+/* ---------- home Projects card: your marks under the current ones (profile/projects.ts) ---------- */
+.ir-proj-head {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ir-faint, #737a8a);
+}
+.overflowable-item > .ir-proj-head:first-child { margin-top: 2px; }
+#ir-home-marks[hidden], #ir-home-marks [hidden], #ir-home-recommended [hidden] { display: none !important; }
+
+/* Marks rows: smaller than intra's default, closer to the rest of the card. */
+#ir-home-marks .project-item { font-size: 14px; line-height: 20px; padding: 4px 10px; }
+#ir-home-marks .marked-title, #ir-home-marks .marked-title a { font-size: 13.5px; line-height: 20px; }
+#ir-home-marks .project-item-lighteable { font-size: 12.5px; color: var(--ir-faint, #737a8a); margin-left: 4px; }
+#ir-home-marks .main-project-item > .pull-right { font-size: 15px; font-weight: 600; }
+#ir-home-marks .main-project-item > .pull-right::before { font-size: 15px; }
+#ir-home-marks .collapsable .project-item, #ir-home-marks .collapsable .pull-right { font-size: 12.5px; }
+.ir-marks-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ir-sort {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ir-border, rgba(255, 255, 255, 0.09));
+}
+.ir-sort button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ir-muted, #a1a7b5);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.ir-sort button:hover { color: var(--ir-text, #e2e4ea); }
+.ir-sort button[aria-checked="true"], .ir-sort button[aria-selected="true"] { background: rgba(0, 186, 188, 0.18); color: #00babc; }
+
+/* ---------- home: Skills and Expertises in one card (profile/skills.ts) ---------- */
+/* Above the chart: its SVG reaches up over the header. */
+.ir-skills-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; z-index: 2; }
+.ir-skills-tabs { font-weight: 400; }
+#skill-chart[hidden], .ir-expertises[hidden] { display: none !important; }
+.ir-expertises { display: flex; flex-direction: column; height: calc(100% - 50px); }
+.ir-expertises > .overflowable-item { flex: 1; overflow: auto; }
+.ir-expertises-links { display: flex; justify-content: flex-end; gap: 14px; padding-top: 8px; font-size: 12.5px; }
+.ir-expertises-links a { border: 0 !important; padding: 0 !important; text-transform: none !important; color: var(--ir-muted, #a1a7b5) !important; }
+.ir-expertises-links a:hover { color: var(--ir-text, #e2e4ea) !important; }
+
+/* Recommended projects (profile/projects.ts): like the in-progress rows, quieter. */
+.ir-rec-item { color: var(--ir-text, #e2e4ea) !important; opacity: 0.85; }
+.ir-rec-item:hover { opacity: 1; color: #00babc !important; }
+.ir-rec-more {
+  margin: 2px 0 0 10px;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: #00babc;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ir-rec-more:hover { text-decoration: underline; }
