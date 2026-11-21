@@ -90,7 +90,7 @@ export function layoutUserPage() {
   if (patPane) {
     patPane.classList.add('active');
     patronages.box.append(patPane);
-    renderFamilyTree(patPane, document, patronages.h);
+    renderFamilyTree(patPane, document, patronages.h, login);
   }
   tabsCol.remove();
   grid.append(achievements.col, patronages.col);

@@ -131,6 +131,7 @@ html.ir-logo-pinned .main-navbar {
 }
 
 .ir-pace-bars {
+  --gap: 4px;
   position: relative;
   height: 40px;
   margin: 22px 0;
@@ -142,19 +143,22 @@ html.ir-logo-pinned .main-navbar {
   bottom: 0;
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   gap: 8px;
-  padding: 0 8px;
-  border-left: 4px solid rgb(23, 23, 23);
-  border-right: 4px solid rgb(23, 23, 23);
+  padding: 0 min(8px, calc(var(--w) * 0.2%));
   border-radius: 6px;
   background: #234f55;
-  background-clip: padding-box;
   overflow: hidden;
   cursor: default;
 }
 
 .ir-pace-seg.done {
   background-color: #4fb8bd;
+}
+
+.ir-pace-seg.bare {
+  justify-content: center;
+  padding: 0;
 }
 
 .ir-pace-seg.done .ir-pace-label {

@@ -6,6 +6,7 @@
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
 import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchIrUser, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
+import { PACES } from '../pace/types';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
@@ -20,6 +21,19 @@ import { bindFriendButton } from '../friends';
 export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
 const DAY_MS = 86_400_000;
+
+/** Every pace as a chip (beside the next milestone's date): the student's highlighted, faster ones
+ * crossed out, slower ones dimmed.
+ * Only on your own profile: the pace API leaves `pace` out (null) for anyone else. */
+function pacesHtml(mine: number) {
+  const all = [...new Set([...PACES, mine])].sort((a, b) => a - b);
+  const chip = (p: number) => {
+    const kind = p < mine ? 'gone' : p === mine ? 'mine' : 'slower';
+    const tip = p === mine ? `Your pace: common core in ${p} months` : p < mine ? `Pace ${p}: faster than yours` : `Pace ${p}`;
+    return `<span class="pace ${kind}" data-tip="${tip}">${p}</span>`;
+  };
+  return `<div class="paces">${all.map(chip).join('')}</div>`;
+}
 
 
 const esc = (s: string) =>
@@ -359,7 +373,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const missed = !frozen && daysLeft !== undefined && daysLeft < 0;
   const blackholed = absorbed || (missed && blackhole); // no common core ahead: no ETA/timeline
   const ccDone = !!goals?.cc_validated; // common core already validated: nothing left to time
-  const danger = !frozen && (blackhole || (daysLeft !== undefined && daysLeft <= 14));
+  // Red only where a deadline can blackhole you (probation / old blackhole); a regular pace
+  // milestone, even a close or missed one, isn't one.
+  const danger = !frozen && blackhole;
   const current = pace ? paceSegments(pace).find((s) => s.level === pace.milestone) : undefined;
   const used = current ? Math.min(1, Math.max(0, (Date.now() - current.from) / (current.to - current.from))) : undefined;
   const C = 2 * Math.PI * 18;
@@ -489,7 +505,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             <div class="sub">${absorbed ? 'Absorbed on' : 'Blackhole on'} ${esc(goals?.bh_date ?? '')}</div>
           ` : daysLeft !== undefined ? `
             <div class="big">${daysLeft}<small> days</small></div>
-            <div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>
+            ${pace?.pace
+              ? `<div class="sub-row"><div class="sub" data-tip="Milestone ${pace.milestone} deadline">${esc(goals?.next_milestone ?? '')}</div>${pacesHtml(pace.pace)}</div>`
+              : `<div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>`}
             ${used !== undefined ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
           ` : ccDone ? `
             <div class="big">Done</div>

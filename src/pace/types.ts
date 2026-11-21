@@ -13,7 +13,12 @@ export interface PaceProfile {
   eta_end_of_cursus: string | null; // null once the common core is validated
   end_of_cursus_max_deadline?: string | null;
   milestones: PaceMilestone[];
+  /** Months the student chose to finish the common core in (one of PACES). */
+  pace?: number | null;
 }
+
+/** The paces 42 offers, fastest first (months for the common core). */
+export const PACES = [8, 12, 15, 18, 22, 24];
 
 export const V2_ORIGIN = 'https://profile.intra.42.fr';
 export const V3_ORIGIN = 'https://profile-v3.intra.42.fr';

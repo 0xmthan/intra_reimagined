@@ -13,8 +13,9 @@ export async function addHomePatronages() {
   if (!login || !grid || document.getElementById(CARD_ID)) return;
 
   const page = await fetchProfilePage(login);
+  // Shown with or without patronages (the tree has an empty state for none).
   const pane = page?.querySelector('#patronages');
-  if (!pane?.querySelector('.patronage-item') || document.getElementById(CARD_ID)) return;
+  if (!pane || document.getElementById(CARD_ID)) return;
 
   const col = document.createElement('div');
   col.id = CARD_ID;
@@ -30,7 +31,7 @@ export async function addHomePatronages() {
   // It keeps its id: intra's patronage styles hang off #patronages (the home page has none).
   const content = document.importNode(pane, true);
   content.classList.add('active');
-  renderFamilyTree(content, page!, title);
+  renderFamilyTree(content, page!, title, login);
   box.append(title, content);
   col.append(box);
   grid.append(col);

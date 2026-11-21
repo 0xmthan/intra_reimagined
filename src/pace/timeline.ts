@@ -181,12 +181,14 @@ export function paceTrackHtml(pace: PaceProfile, { yearMarks = false } = {}) {
     months.push(`<span class="ir-pace-month" style="left:${pct(d.getTime())}%">${MONTHS[d.getMonth()]}${year}</span>`);
   }
 
+  // Each bar is inset by --gap on both sides (the space between bars) and its padding shrinks with
+  // it (--w, its share of the track), so a short milestone never grows past its own slot.
   const bars = segments
     .map(({ level, from, to, done }) => {
       const left = pct(from);
       const width = pct(to) - left;
       const text = label(level, width);
-      return `<div class="ir-pace-seg${done ? ' done' : ''}${level === pace.milestone ? ' current' : ''}" style="left:${left}%;width:${width}%" data-begin="${fmtTime(from)}" data-end="${fmtTime(to)}" data-took="${durationLine(from, to, done)}">
+      return `<div class="ir-pace-seg${done ? ' done' : ''}${level === pace.milestone ? ' current' : ''}${text ? '' : ' bare'}" style="--w:${width};left:calc(${left}% + var(--gap));width:max(0px, calc(${width}% - 2 * var(--gap)))" data-begin="${fmtTime(from)}" data-end="${fmtTime(to)}" data-took="${durationLine(from, to, done)}">
         <span class="ir-pace-check">${done ? '✓' : ''}</span>${text ? `<span class="ir-pace-label">${text}</span>` : ''}
       </div>`;
     })

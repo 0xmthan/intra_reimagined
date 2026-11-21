@@ -7,6 +7,7 @@
 // "All families" opens every family at your campus (families.ts). Built with DOM APIs in a shadow
 // root that replaces the pane's contents (on profile pages, and the copy in our home card).
 import { fetchFamily, type Family } from './data';
+import { myLogin } from '../me';
 import { openFamilies } from './families';
 
 const HOST = 'ir-family-tree';
@@ -54,13 +55,14 @@ function readPane(pane: Element, login: string, ownerAvatar?: string) {
 /**
  * Turns a #patronages pane into the tree. `doc` is the page the pane came from. With `header`
  * (our home card's title), "All families" and "Reports" go there as pills and the tree fills
- * the card; otherwise they sit under the tree.
+ * the card; otherwise they sit under the tree. `login` is whose pane it is, for panes without
+ * patronages (intra then leaves out the Reports link we otherwise read it from).
  */
-export function renderFamilyTree(pane: Element, doc: Document = document, header?: Element) {
+export function renderFamilyTree(pane: Element, doc: Document = document, header?: Element, login?: string) {
   if (pane.querySelector(HOST)) return;
   const reports = pane.querySelector<HTMLAnchorElement>('a[href$="/patronages"]');
-  const owner = reports?.getAttribute('href')?.match(/\/users\/([^/]+)\/patronages$/)?.[1];
-  if (!reports || !owner || !LOGIN.test(owner)) return;
+  const owner = reports?.getAttribute('href')?.match(/\/users\/([^/]+)\/patronages$/)?.[1] ?? login;
+  if (!owner || !LOGIN.test(owner)) return;
   const avatarEl = doc.querySelector('.profile-item .user-image');
   const ownerAvatar = inlineBg(avatarEl) ?? (doc === document && avatarEl ? computedBg(avatarEl) : undefined);
   const page = readPane(pane, owner, ownerAvatar);
@@ -74,17 +76,20 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
   all.type = 'button';
   all.textContent = 'All families';
   all.addEventListener('click', () => openFamilies(owner));
-  const reportsLink = document.createElement('a');
-  reportsLink.href = reports.href;
-  reportsLink.textContent = 'Reports';
+  // Reports only exist where intra links them (not on a pane without patronages).
+  const reportsLink = reports ? document.createElement('a') : undefined;
+  if (reportsLink) {
+    reportsLink.href = reports!.href;
+    reportsLink.textContent = 'Reports';
+  }
   const foot = el('div', 'foot');
   if (header) {
-    reportsLink.className = 'btn simple-link';
+    reportsLink && (reportsLink.className = 'btn simple-link');
     const pills = el('span', 'pull-right');
-    pills.append(all, reportsLink);
+    pills.append(all, ...(reportsLink ? [reportsLink] : []));
     header.append(pills);
     host.setAttribute('fill', '');
-  } else foot.append(all, reportsLink);
+  } else foot.append(all, ...(reportsLink ? [reportsLink] : []));
   const frame = el('div', 'frame');
   frame.append(viewport, ...['up', 'down', 'left', 'right'].map((d) => el('div', `fade ${d}`)));
   root.append(style, frame, ...(header ? [] : [foot]));
@@ -96,6 +101,7 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
 
   const show = (f: Family) => {
     f.people.forEach((img, l) => img && !avatars.has(l) && avatars.set(l, img));
+    if (!f.links.length) return viewport.replaceChildren(emptyState(f.login, avatars.get(f.login)));
     const tree = layout(f, { avatars, titles: page.titles, center: f.login });
     viewport.replaceChildren(tree.canvas);
     focus(viewport, tree.nodes.get(f.login)!);
@@ -117,6 +123,25 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
   // The page's one level right away, then the whole line from our server.
   show(page.family);
   void fetchFamily(owner).then((f) => f && f !== 'auth' && show(f));
+}
+
+/** No patronages at all (none on intra, none ended either): who it is, and that the tree is empty. */
+function emptyState(login: string, avatar?: string) {
+  const own = login === myLogin();
+  const box = el('div', 'empty');
+  const pic = el('a', 'avatar');
+  pic.href = `https://profile.intra.42.fr/users/${login}`;
+  const bg = cssUrl(avatar);
+  if (bg) pic.style.backgroundImage = bg;
+  else pic.textContent = login[0].toUpperCase();
+  const title = el('div', 'empty-title');
+  title.textContent = 'No patronages yet';
+  const text = el('p', 'empty-text');
+  text.textContent = own
+    ? 'You’re not patroning anyone, and you don’t have a patron.'
+    : `${login} isn’t patroning anyone and doesn’t have a patron.`;
+  box.append(pic, title, text);
+  return box;
 }
 
 /**
@@ -404,4 +429,11 @@ const CSS = `
 .foot a { color: var(--ir-muted, #a1a7b5); font-size: 12.5px; text-decoration: none; }
 .foot a:hover { color: var(--ir-text, #e2e4ea); text-decoration: underline; }
 :focus-visible { outline: 2px solid #00babc; outline-offset: 2px; }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 100%; padding: 22px 16px; box-sizing: border-box; text-align: center; cursor: default; }
+.empty .avatar {
+  width: 60px; height: 60px; margin-bottom: 6px; text-decoration: none;
+  box-shadow: 0 0 0 3px var(--tree-bg, #1b1f27), 0 0 0 5px rgba(255, 255, 255, 0.14);
+}
+.empty-title { font-size: 15px; font-weight: 600; }
+.empty-text { margin: 0; max-width: 280px; font-size: 13px; color: var(--ir-muted, #a1a7b5); }
 ${TREE_CSS}`;
