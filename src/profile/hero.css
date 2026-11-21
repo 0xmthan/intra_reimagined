@@ -467,6 +467,14 @@ button.icon-btn {
   height: 19px;
 }
 
+/* Friends button (friends.ts): teal once they're on your list. */
+.icon-btn.friend-btn.on {
+  color: #2ee6e8;
+  border-color: rgba(0, 186, 188, 0.45);
+  background: rgba(0, 186, 188, 0.14);
+}
+.icon-btn.friend-btn:disabled { opacity: 0.5; cursor: default; }
+
 /* ── stats strip ── */
 .stats {
   display: grid;

@@ -15,6 +15,7 @@ import { NEEDS_LOGIN, connect } from '../auth';
 import { openBannerEditor } from './banner';
 import { setHTML } from '../html';
 import { openClusters } from '../clusters';
+import { bindFriendButton } from '../friends';
 
 export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
@@ -433,6 +434,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           ${d.own && NEEDS_LOGIN
             ? `<button class="icon-btn" data-act="banner" data-tip="Change banner">${icon('edit')}</button>`
             : d.links.edit ? `<a class="icon-btn" href="${esc(d.links.edit)}" data-tip="Edit profile">${icon('edit')}</a>` : ''}
+          ${!d.own && NEEDS_LOGIN ? `<button class="icon-btn friend-btn" data-act="friend" data-tip="Friends">${icon('edit')}</button>` : ''}
           ${!d.own && d.email ? `<a class="icon-btn" href="mailto:${esc(d.email)}" data-tip="Send email">${icon('mail')}</a>` : ''}
         </div>
       </section>
@@ -529,4 +531,6 @@ function bind(hero: HTMLElement, d: HeroData) {
   hero.querySelector('[data-act="copy"]')?.addEventListener('click', () => navigator.clipboard?.writeText(d.login));
   hero.querySelector('[data-act="seat"]')?.addEventListener('click', () => openClusters(d.location.text));
   hero.querySelector('[data-act="give"]')?.addEventListener('click', () => d.giveEl?.click());
+  const friendBtn = hero.querySelector<HTMLButtonElement>('[data-act="friend"]');
+  if (friendBtn) bindFriendButton(friendBtn, d.login);
 }

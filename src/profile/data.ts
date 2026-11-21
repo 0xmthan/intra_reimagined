@@ -341,6 +341,40 @@ export async function fetchLogtimeSessions(login: string): Promise<[number, numb
   return j.sessions.filter(ok);
 }
 
+// ---------- friends (server: GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login) ----------
+
+const LOGIN_RE = /^[a-z0-9-]{1,32}$/;
+const friendList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((f) => (f as { login?: unknown })?.login).filter((l): l is string => typeof l === 'string' && LOGIN_RE.test(l)) : [];
+
+/** Your friends' logins, oldest first; 'auth' = not signed in; undefined = unknown (no server, offline). */
+export async function fetchFriends(): Promise<string[] | 'auth' | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ friends: unknown }>('/v1/me/friends', 'no-cache');
+  return j === 'auth' ? 'auth' : j ? friendList(j.friends) : undefined;
+}
+
+/** Adds or removes a friend; the new list, or a message to show. Nothing is sent to them. */
+export async function saveFriend(login: string, add: boolean): Promise<{ friends: string[] } | { error: string }> {
+  const token = await getToken();
+  if (!IR_API || !token) return { error: 'Log in with 42 to keep a friends list.' };
+  if (!LOGIN_RE.test(login)) return { error: 'That isn’t a 42 login.' };
+  try {
+    const res = await fetch(`${IR_API}/v1/me/friends/${encodeURIComponent(login)}`, {
+      method: add ? 'PUT' : 'DELETE',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const j = (await res.json().catch(() => ({}))) as { friends?: unknown; error?: unknown };
+    if (res.status === 401) dropToken();
+    if (res.status === 404) return { error: `No student called ${login}.` };
+    if (!res.ok) return { error: typeof j.error === 'string' ? j.error[0].toUpperCase() + j.error.slice(1) + '.' : `Couldn't save (${res.status}).` };
+    return { friends: friendList(j.friends) };
+  } catch {
+    return { error: "Couldn't reach the server. Try again." };
+  }
+}
+
 // ---------- Intra Reimagined users (server: /v1/users/:login/ir, /v1/me/ir) ----------
 
 /** Whether `login` uses the extension (and, for yourself, whether you hid the badge); undefined = unknown. */

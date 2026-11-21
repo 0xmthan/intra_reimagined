@@ -1,11 +1,13 @@
 // Removes intra's white top bar on desktop and moves what it held into the bottom of the left
-// sidebar: search (our palette, see search.ts), notifications, "Have a problem?" and the account
+// sidebar: search (our palette, see search.ts), friends (friends.ts), notifications, "Have a problem?" and the account
 // menu. The bell and the account dropdown are intra's own elements, moved (not copied), so intra's
 // scripts keep driving them: fetching notifications, marking them read, the Bootstrap dropdown.
 // On phones the sidebar becomes a bottom tab bar (styles.css), so the tools stay in it there too;
 // everything goes back where it came from when the setting is switched off.
 import { setHTML } from './html';
 import { openSearch } from './search';
+import { svg as friendIcon, toggleFriends } from './friends';
+import { NEEDS_LOGIN } from './auth';
 
 const TOOLS_ID = 'ir-side-tools';
 const ON_CLASS = 'ir-no-topbar';
@@ -46,12 +48,17 @@ function mount() {
   setHTML(
     tools,
     `<li class="ir-tool"><a href="#" class="ir-search-btn" aria-label="Search">${ICON.search}<span class="ir-tool-label">Search <kbd>${isMac ? '⌘' : 'Ctrl '}K</kbd></span></a></li>
+     ${NEEDS_LOGIN ? `<li class="ir-tool" id="ir-friends-tool"><a href="#" class="ir-friends-btn" aria-label="Friends">${friendIcon('friends')}<span class="ir-tool-label">Friends</span></a></li>` : ''}
      <li class="ir-tool ir-bell"><span class="ir-tool-label">Notifications</span></li>
      ${helpHref ? `<li class="ir-tool ir-help"><a href="${helpHref}" aria-label="Have a problem?">${ICON.help}<span class="ir-tool-label">Have a problem?</span></a></li>` : ''}
      <li class="ir-tool ir-account"></li>`,
   );
   sidebar.appendChild(tools);
 
+  tools.querySelector('.ir-friends-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    toggleFriends();
+  });
   tools.querySelector('.ir-search-btn')!.addEventListener('click', (e) => {
     e.preventDefault();
     openSearch();

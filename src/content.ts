@@ -31,6 +31,7 @@ import { reworkAchievements } from './profile/achievements';
 import { reworkAchievementsPage } from './profile/achievements-page';
 import { initClusterZoom } from './clusters-zoom';
 import { initNews } from './news';
+import { initFriends } from './friends';
 import { NEEDS_LOGIN, connect, consumeAuthRedirect, getToken, loginHint, setLoginHint } from './auth';
 import { ask, dismiss, dismissed, loginPill } from './gate';
 
@@ -132,6 +133,7 @@ async function build(): Promise<'leaving' | void> {
   addSettingsButton();
   setSidebarTools(true);
   document.documentElement.classList.remove(TOOLS_PENDING);
+  if (NEEDS_LOGIN) initFriends();
   if (location.origin === V2_ORIGIN && isProfilePage()) {
     mountHero();
     layoutUserPage(); // others' /users/<login>: the home page's card layout

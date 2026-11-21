@@ -316,6 +316,17 @@ html.ir-no-topbar .page-sidebar > * {
 #ir-side-tools .ir-help > a {
   color: #e8818a;
 }
+/* Friends panel open (friends.ts). */
+#ir-side-tools #ir-friends-tool.on > a { background: rgba(0, 186, 188, 0.14); color: #2ee6e8; }
+#ir-friends-toast {
+  position: fixed; z-index: 3100; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
+  padding: 9px 16px; border-radius: 12px; background: rgba(20, 22, 29, 0.96); color: #f2f4f7;
+  border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font: 14px futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
+  opacity: 0; pointer-events: none; transition: opacity 0.18s, transform 0.18s;
+}
+#ir-friends-toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 767px) { #ir-friends-toast { bottom: calc(84px + env(safe-area-inset-bottom)); } }
 #ir-side-tools .ir-help > a:hover {
   color: #ff9aa2;
 }
