@@ -399,8 +399,8 @@ const CSS = `
 :host {
   display: flex; flex-direction: column; gap: 14px; min-height: 0;
   font: 14px/1.35 futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
-  color: #f2f4f7; --muted: rgba(242, 244, 247, 0.66); --faint: rgba(242, 244, 247, 0.4);
-  --line: rgba(255, 255, 255, 0.09); --coal: #00babc; --cell: 17px;
+  color: var(--ir-text); --muted: rgba(var(--ir-ink-text), 0.66); --faint: rgba(var(--ir-ink-text), 0.4);
+  --line: rgba(var(--ir-ink), 0.09); --coal: var(--ir-accent); --cell: 17px;
   overflow: hidden;
 }
 .tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; flex: none; }
@@ -422,7 +422,7 @@ const CSS = `
 .heat-scroll {
   flex: 1; min-width: 0; display: grid; gap: 4px; align-content: start; justify-content: start; overflow-x: auto; overflow-y: hidden;
   padding-bottom: 6px;
-  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin; scrollbar-color: rgba(var(--ir-ink), 0.18) transparent;
 }
 .months { display: grid; gap: 3px; font-size: 11px; color: var(--faint); height: 14px; }
 .months span { white-space: nowrap; overflow: visible; }
@@ -432,21 +432,21 @@ const CSS = `
 /* Week totals, one under each column. */
 .totals { display: grid; column-gap: 3px; height: 13px; font-size: 10px; line-height: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .totals span { text-align: center; white-space: nowrap; overflow: visible; }
-.totals span.now { color: #2ee6e8; font-weight: 600; }
-.cell { width: var(--cell); height: var(--cell); border-radius: 5px; background: rgba(255, 255, 255, 0.05); }
+.totals span.now { color: var(--ir-accent-hi); font-weight: 600; }
+.cell { width: var(--cell); height: var(--cell); border-radius: 5px; background: rgba(var(--ir-ink), 0.05); }
 .cell.out { background: transparent; }
-.cell.today { outline: 1.5px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
-.cell[data-l='1'] { background: rgba(0, 186, 188, 0.22); }
-.cell[data-l='2'] { background: rgba(0, 186, 188, 0.4); }
-.cell[data-l='3'] { background: rgba(0, 186, 188, 0.6); }
-.cell[data-l='4'] { background: rgba(0, 186, 188, 0.8); }
-.cell[data-l='5'] { background: #2ee6e8; }
+.cell.today { outline: 1.5px solid rgba(var(--ir-ink), 0.55); outline-offset: 1px; }
+.cell[data-l='1'] { background: rgba(var(--ir-accent-rgb), 0.22); }
+.cell[data-l='2'] { background: rgba(var(--ir-accent-rgb), 0.4); }
+.cell[data-l='3'] { background: rgba(var(--ir-accent-rgb), 0.6); }
+.cell[data-l='4'] { background: rgba(var(--ir-accent-rgb), 0.8); }
+.cell[data-l='5'] { background: var(--ir-accent-hi); }
 
 
 /* Calendar view: every month side by side, newest on the right (scrolls back like the heatmap). */
 .cal-strip {
   display: flex; gap: 22px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; align-items: start;
-  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin; scrollbar-color: rgba(var(--ir-ink), 0.18) transparent;
 }
 .cal { flex: none; display: grid; gap: 4px; align-content: start; }
 .cal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; height: 18px; font-size: 13px; white-space: nowrap; }
@@ -457,16 +457,16 @@ const CSS = `
 .cal-grid .wd { font-size: 10px; line-height: 13px; text-align: center; color: var(--faint); }
 .day {
   border-radius: 5px; font-size: 10px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums;
-  color: rgba(242, 244, 247, 0.72); background: rgba(255, 255, 255, 0.05);
+  color: rgba(var(--ir-ink-text), 0.72); background: rgba(var(--ir-ink), 0.05);
 }
 .day.blank { background: transparent; }
-.day.out { background: transparent; color: rgba(242, 244, 247, 0.22); }
-.day.today { outline: 1.5px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
-.day[data-l='1'] { background: rgba(0, 186, 188, 0.22); }
-.day[data-l='2'] { background: rgba(0, 186, 188, 0.4); }
-.day[data-l='3'] { background: rgba(0, 186, 188, 0.6); color: #fff; }
-.day[data-l='4'] { background: rgba(0, 186, 188, 0.8); color: #062326; font-weight: 600; }
-.day[data-l='5'] { background: #2ee6e8; color: #062326; font-weight: 600; }
+.day.out { background: transparent; color: rgba(var(--ir-ink-text), 0.22); }
+.day.today { outline: 1.5px solid rgba(var(--ir-ink), 0.55); outline-offset: 1px; }
+.day[data-l='1'] { background: rgba(var(--ir-accent-rgb), 0.22); }
+.day[data-l='2'] { background: rgba(var(--ir-accent-rgb), 0.4); }
+.day[data-l='3'] { background: rgba(var(--ir-accent-rgb), 0.6); color: #fff; }
+.day[data-l='4'] { background: rgba(var(--ir-accent-rgb), 0.8); color: #062326; font-weight: 600; }
+.day[data-l='5'] { background: var(--ir-accent-hi); color: #062326; font-weight: 600; }
 
 /* Phones: tiles in two rows of three; the heatmap above the weekly bars. */
 @media (max-width: 768px) {

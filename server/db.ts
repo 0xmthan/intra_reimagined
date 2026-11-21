@@ -61,6 +61,13 @@ export interface Patronage {
   updatedAt: Date;
 }
 
+export interface IrUser {
+  hidden: boolean;
+  mode: string | null;
+  accent: string | null;
+  shareTheme: boolean;
+}
+
 export class Db {
   readonly #sql: postgres.Sql;
 
@@ -127,6 +134,10 @@ export class Db {
         first_seen timestamptz not null default now(),
         last_seen  timestamptz not null default now()
       )`;
+    // Their theme (settings.ts), and whether visitors of their profile see it too.
+    await this.#sql`alter table ir_users add column if not exists mode text`;
+    await this.#sql`alter table ir_users add column if not exists accent text`;
+    await this.#sql`alter table ir_users add column if not exists share_theme boolean not null default true`;
     // Every patronage on 42 (family.ts keeps it in sync and in memory).
     await this.#sql`
       create table if not exists patronages (
@@ -319,9 +330,22 @@ export class Db {
   }
 
   /** undefined if they never signed in to the extension. */
-  async getIrUser(login: string): Promise<{ hidden: boolean } | undefined> {
-    const [row] = await this.#sql<{ hidden: boolean }[]>`select hidden from ir_users where login = ${login}`;
+  async getIrUser(login: string): Promise<IrUser | undefined> {
+    const [row] = await this.#sql<IrUser[]>`
+      select hidden, mode, accent, share_theme as "shareTheme" from ir_users where login = ${login}`;
     return row;
+  }
+
+  /** Saves the given theme fields (null = back to the default), leaving the others as they are. */
+  async setIrTheme(login: string, t: { mode?: string | null; accent?: string | null; shareTheme?: boolean }) {
+    const cur = await this.getIrUser(login);
+    const mode = t.mode !== undefined ? t.mode : (cur?.mode ?? null);
+    const accent = t.accent !== undefined ? t.accent : (cur?.accent ?? null);
+    const share = t.shareTheme ?? cur?.shareTheme ?? true;
+    await this.#sql`
+      insert into ir_users (login, mode, accent, share_theme) values (${login}, ${mode}, ${accent}, ${share})
+      on conflict (login) do update set mode = excluded.mode, accent = excluded.accent,
+        share_theme = excluded.share_theme, last_seen = now()`;
   }
 
   async setIrHidden(login: string, hidden: boolean) {

@@ -6,15 +6,141 @@
 // classes, judged from the original light-theme colors. Saturated colors, images and emojis are
 // never touched, so they keep their true colors.
 
+import { saveIrTheme } from './profile/data';
+
 const DONE = 'irDk'; // data-ir-dk on elements already looked at
 // Our own UI is designed dark already; intra's sidebar is natively dark.
-const SKIP = '#ir-hero, #ir-palette, #ir-side-tools, #ir-logo, .page-sidebar, svg, img, video, canvas, iframe';
+const SKIP = '#ir-hero, .ir-theme-swatch, #ir-palette, #ir-side-tools, #ir-logo, .page-sidebar, svg, img, video, canvas, iframe';
 
 let observer: MutationObserver | undefined;
 
 export function initTheme() {
+  initPrefs();
+  if (currentMode() === 'dark') goDark();
+}
+
+function goDark() {
   document.documentElement.classList.add('ir-dark');
   startTagging();
+}
+
+// ---------- mode and accent ----------
+// Both are picked in settings and live in storage.local so every intra site shares them, mirrored
+// to each site's localStorage so they apply at document_start without waiting on the async read.
+// Light mode leaves intra's own (light) colors alone; our UI follows the --ir-* tokens.
+
+export const MODES = [
+  { id: 'dark', name: 'Dark', color: '#14171d' },
+  { id: 'light', name: 'Light', color: '#f4f5f7' },
+] as const;
+export const ACCENTS = [
+  { id: 'default', name: 'Default', color: '#00babc' },
+  { id: 'green', name: 'Green', color: '#3ddc84' },
+] as const;
+export type Mode = (typeof MODES)[number]['id'];
+export type Accent = (typeof ACCENTS)[number]['id'];
+
+interface StorageArea {
+  get(keys: string[]): Promise<Record<string, unknown>>;
+  set(items: Record<string, unknown>): Promise<void>;
+}
+interface Ext {
+  storage: { local: StorageArea; onChanged: { addListener(cb: (changes: Record<string, { newValue?: unknown }>, area: string) => void): void } };
+}
+const ext = (globalThis as { browser?: Ext }).browser ?? (globalThis as { chrome?: Ext }).chrome;
+
+/** storage key → the <html> attribute it sets, its choices, and the one that sets nothing. */
+const PREFS = {
+  mode: { attr: 'data-ir-mode', ids: MODES.map((m) => m.id) as string[], fallback: 'dark' },
+  accent: { attr: 'data-ir-accent', ids: ACCENTS.map((a) => a.id) as string[], fallback: 'default' },
+};
+type Pref = keyof typeof PREFS;
+
+// On someone else's profile that shares its theme, the page shows theirs: our own choices still
+// get saved, but don't touch the page until we leave.
+let visiting = false;
+
+function apply(pref: Pref, value: unknown, persist = true) {
+  const { attr, ids, fallback } = PREFS[pref];
+  const v = typeof value === 'string' && ids.includes(value) ? value : fallback;
+  const html = document.documentElement;
+  if (persist && visiting) return void remember(pref, v, fallback);
+  if (v === fallback) html.removeAttribute(attr);
+  else html.setAttribute(attr, v);
+  if (persist) remember(pref, v, fallback);
+  if (pref === 'mode') {
+    if (v === 'dark') goDark();
+    else html.classList.remove('ir-dark'); // the .ir-dk-* tags only style under html.ir-dark
+  }
+}
+
+/** Shows someone else's shared theme on their profile (not saved: only for this page). */
+export function showVisitedTheme(t: { mode: string; accent: string }) {
+  visiting = true;
+  apply('mode', t.mode, false);
+  apply('accent', t.accent, false);
+}
+
+/**
+ * Your theme as the server has it (from your own profile): the server wins, so a theme picked on
+ * another device shows up here. Never saved there yet: send the local one up.
+ */
+export function syncOwnTheme(t: { mode: string; accent: string; saved?: boolean } | undefined) {
+  if (!t) return;
+  if (t.saved) {
+    if (t.mode !== currentMode()) void setPref('mode', t.mode as Mode);
+    if (t.accent !== currentAccent()) void setPref('accent', t.accent as Accent);
+  } else if (currentMode() !== 'dark' || currentAccent() !== 'default') {
+    void saveIrTheme({ mode: currentMode(), accent: currentAccent() });
+  }
+}
+
+function remember(pref: Pref, v: string, fallback: string) {
+  try {
+    if (v === fallback) localStorage.removeItem(`ir-${pref}`);
+    else localStorage.setItem(`ir-${pref}`, v);
+  } catch {
+    /* no localStorage: storage.local still has it */
+  }
+}
+
+const read = (pref: Pref) => document.documentElement.getAttribute(PREFS[pref].attr) ?? PREFS[pref].fallback;
+export const currentMode = () => read('mode') as Mode;
+export const currentAccent = () => read('accent') as Accent;
+
+export async function setPref(pref: 'mode', v: Mode): Promise<void>;
+export async function setPref(pref: 'accent', v: Accent): Promise<void>;
+export async function setPref(pref: Pref, v: string) {
+  apply(pref, v);
+  try {
+    await ext?.storage.local.set({ [pref]: v });
+  } catch {
+    /* kept for this site only */
+  }
+}
+
+function initPrefs() {
+  const keys = Object.keys(PREFS) as Pref[];
+  for (const k of keys) {
+    try {
+      const cached = localStorage.getItem(`ir-${k}`);
+      if (cached) {
+        const { attr } = PREFS[k];
+        document.documentElement.setAttribute(attr, cached); // checked by the storage.local read below
+      }
+    } catch {
+      /* unreadable: the storage.local read below sets it */
+    }
+  }
+  try {
+    ext?.storage.local.get(keys).then((r) => keys.forEach((k) => apply(k, r[k])), () => {});
+    // Picked in another tab: follow along.
+    ext?.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local') for (const k of keys) if (k in changes) apply(k, changes[k].newValue);
+    });
+  } catch {
+    /* no extension storage (shouldn't happen in a content script) */
+  }
 }
 
 // ---------- tagging ----------

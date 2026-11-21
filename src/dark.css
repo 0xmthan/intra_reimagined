@@ -4,14 +4,7 @@
    then tags any other light box / dark text it finds with .ir-dk-* classes, styled at the end. */
 
 html.ir-dark {
-  --ir-bg: #0b0d11; /* the profile header's bottom, so the page continues it */
-  --ir-surface: #14171d;
-  --ir-surface-2: #1b1f27;
-  --ir-surface-3: #252a35;
-  --ir-border: rgba(255, 255, 255, 0.09);
-  --ir-text: #e2e4ea;
-  --ir-muted: #a1a7b5;
-  --ir-faint: #737a8a;
+  /* the --ir-* tokens are on :root in styles.css */
   color-scheme: dark;
   background: var(--ir-bg); /* also the overscroll canvas */
 }
@@ -78,7 +71,7 @@ html.ir-dark .page-content svg text:is([fill='#ccc'], [fill='#999']) {
   fill: var(--ir-faint);
 }
 html.ir-dark .page-content svg text[fill='#007B7C'] {
-  fill: #4fd1d3;
+  fill: var(--ir-accent-soft);
 }
 
 /* Highcharts (skills radar, project stats): white plot background, #333 labels set inline. */

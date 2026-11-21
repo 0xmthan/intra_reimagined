@@ -367,8 +367,8 @@ function node(login: string, center: boolean, avatar: string | undefined, title:
 export const TREE_CSS = `
 .canvas { position: relative; margin: 0 auto; animation: in 180ms ease-out; }
 .branches { position: absolute; inset: 0; pointer-events: none; }
-.branches path { fill: none; stroke: #00babc; stroke-width: 2; stroke-linecap: round; opacity: 0.55; }
-.branches path.ended { stroke: var(--ir-faint, #737a8a); stroke-dasharray: 3 5; opacity: 0.7; }
+.branches path { fill: none; stroke: var(--ir-accent); stroke-width: 2; stroke-linecap: round; opacity: 0.55; }
+.branches path.ended { stroke: var(--ir-faint); stroke-dasharray: 3 5; opacity: 0.7; }
 .node {
   position: absolute; width: ${SLOT}px; box-sizing: border-box; margin: 0;
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 4px 0;
@@ -376,12 +376,12 @@ export const TREE_CSS = `
   border-radius: 12px; transition: transform 140ms ease, opacity 140ms ease;
 }
 .node:hover { transform: translateY(-2px); }
-.node:hover .avatar { box-shadow: 0 0 0 2px var(--tree-bg, #1b1f27), 0 0 0 4px #00babc, 0 6px 16px rgba(0, 0, 0, 0.35); }
+.node:hover .avatar { box-shadow: 0 0 0 2px var(--tree-bg, var(--ir-surface-2)), 0 0 0 4px var(--ir-accent), 0 6px 16px rgba(0, 0, 0, 0.35); }
 .avatar {
   flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--ir-surface-3, #252a35) center / cover no-repeat;
-  box-shadow: 0 0 0 2px var(--tree-bg, #1b1f27), 0 0 0 3px rgba(255, 255, 255, 0.12);
-  color: var(--ir-muted, #a1a7b5); font-weight: 600; font-size: 18px;
+  background: var(--ir-surface-3) center / cover no-repeat;
+  box-shadow: 0 0 0 2px var(--tree-bg, var(--ir-surface-2)), 0 0 0 3px rgba(var(--ir-ink), 0.12);
+  color: var(--ir-muted); font-weight: 600; font-size: 18px;
   transition: box-shadow 140ms ease;
 }
 .login {
@@ -390,9 +390,9 @@ export const TREE_CSS = `
 }
 .center .avatar {
   width: 60px; height: 60px;
-  box-shadow: 0 0 0 3px var(--tree-bg, #1b1f27), 0 0 0 5px #00babc, 0 8px 22px rgba(0, 186, 188, 0.2);
+  box-shadow: 0 0 0 3px var(--tree-bg, var(--ir-surface-2)), 0 0 0 5px var(--ir-accent), 0 8px 22px rgba(var(--ir-accent-rgb), 0.2);
 }
-.center:hover .avatar { box-shadow: 0 0 0 3px var(--tree-bg, #1b1f27), 0 0 0 5px #00babc, 0 8px 22px rgba(0, 186, 188, 0.35); }
+.center:hover .avatar { box-shadow: 0 0 0 3px var(--tree-bg, var(--ir-surface-2)), 0 0 0 5px var(--ir-accent), 0 8px 22px rgba(var(--ir-accent-rgb), 0.35); }
 .center .login { font-size: 14.5px; font-weight: 600; }
 .ended { opacity: 0.45; }
 .ended .avatar { filter: grayscale(0.85); }
@@ -403,10 +403,10 @@ export const TREE_CSS = `
 
 const CSS = `
 /* --tree-bg (avatar rings, edge fades): the glass card's own color, not the old blue-grey surface. */
-:host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text, #e2e4ea); --tree-bg: #14161a; }
+:host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text); --tree-bg: var(--ir-surface); }
 .viewport {
   overflow: auto; max-height: 330px; cursor: grab;
-  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-width: thin; scrollbar-color: rgba(var(--ir-ink), 0.15) transparent;
 }
 .viewport.dragging { cursor: grabbing; user-select: none; }
 .viewport.dragging * { cursor: grabbing !important; }
@@ -423,18 +423,18 @@ const CSS = `
 .frame.more-up .fade.up, .frame.more-down .fade.down, .frame.more-left .fade.left, .frame.more-right .fade.right { opacity: 1; }
 .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px 2px; }
 .all {
-  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ir-text, #e2e4ea); cursor: pointer;
-  background: rgba(0, 186, 188, 0.12); border: 1px solid rgba(0, 186, 188, 0.35); border-radius: 999px; padding: 4px 12px;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ir-text); cursor: pointer;
+  background: rgba(var(--ir-accent-rgb), 0.12); border: 1px solid rgba(var(--ir-accent-rgb), 0.35); border-radius: 999px; padding: 4px 12px;
 }
-.all:hover { background: rgba(0, 186, 188, 0.2); }
-.foot a { color: var(--ir-muted, #a1a7b5); font-size: 12.5px; text-decoration: none; }
-.foot a:hover { color: var(--ir-text, #e2e4ea); text-decoration: underline; }
-:focus-visible { outline: 2px solid #00babc; outline-offset: 2px; }
+.all:hover { background: rgba(var(--ir-accent-rgb), 0.2); }
+.foot a { color: var(--ir-muted); font-size: 12.5px; text-decoration: none; }
+.foot a:hover { color: var(--ir-text); text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--ir-accent); outline-offset: 2px; }
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 100%; padding: 22px 16px; box-sizing: border-box; text-align: center; cursor: default; }
 .empty .avatar {
   width: 60px; height: 60px; margin-bottom: 6px; text-decoration: none;
-  box-shadow: 0 0 0 3px var(--tree-bg, #1b1f27), 0 0 0 5px rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 3px var(--tree-bg, var(--ir-surface-2)), 0 0 0 5px rgba(var(--ir-ink), 0.14);
 }
 .empty-title { font-size: 15px; font-weight: 600; }
-.empty-text { margin: 0; max-width: 280px; font-size: 13px; color: var(--ir-muted, #a1a7b5); }
+.empty-text { margin: 0; max-width: 280px; font-size: 13px; color: var(--ir-muted); }
 ${TREE_CSS}`;

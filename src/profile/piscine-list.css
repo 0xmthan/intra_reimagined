@@ -14,11 +14,11 @@
   backdrop-filter: blur(4px);
   font-family: futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
   animation: fade 0.12s ease-out;
-  --text: #f2f4f7;
-  --muted: rgba(242, 244, 247, 0.62);
-  --faint: rgba(242, 244, 247, 0.4);
-  --line: rgba(255, 255, 255, 0.08);
-  --accent: #00babc;
+  --text: var(--ir-text);
+  --muted: rgba(var(--ir-ink-text), 0.62);
+  --faint: rgba(var(--ir-ink-text), 0.4);
+  --line: rgba(var(--ir-ink), 0.08);
+  --accent: var(--ir-accent);
 }
 .panel {
   width: min(1000px, 100%);
@@ -26,8 +26,8 @@
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: #16171c;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--ir-surface);
+  border: 1px solid rgba(var(--ir-ink), 0.12);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   color: var(--text);
   overflow: hidden;
@@ -52,8 +52,8 @@ h2 {
 }
 .x {
   border: 0;
-  background: rgba(255, 255, 255, 0.06);
-  color: #8b93a7;
+  background: rgba(var(--ir-ink), 0.06);
+  color: var(--ir-muted);
   font-size: 16px;
   line-height: 1;
   width: 34px;
@@ -62,7 +62,7 @@ h2 {
   cursor: pointer;
 }
 .x:hover {
-  background: rgba(255, 255, 255, 0.11);
+  background: rgba(var(--ir-ink), 0.11);
   color: #fff;
 }
 
@@ -74,7 +74,7 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+  background: linear-gradient(180deg, rgba(var(--ir-ink), 0.04), rgba(var(--ir-ink), 0.015));
 }
 /* Only the list scrolls: everything above it keeps its height. */
 header,
@@ -118,7 +118,7 @@ header,
   color: #ff8a8e;
 }
 .stat.me b {
-  color: #2ee6e8;
+  color: var(--ir-accent-hi);
 }
 
 .tools {
@@ -136,7 +136,7 @@ input[type='search'] {
   padding: 0 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ir-ink), 0.05);
   color: #fff;
   font: inherit;
   font-size: 14px;
@@ -146,7 +146,7 @@ input[type='search']::placeholder {
   color: var(--faint);
 }
 input[type='search']:focus {
-  border-color: rgba(0, 186, 188, 0.6);
+  border-color: rgba(var(--ir-accent-rgb), 0.6);
 }
 .sort-slot {
   display: flex;
@@ -163,7 +163,7 @@ input[type='search']:focus {
   flex-wrap: wrap;
   padding: 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ir-ink), 0.05);
   border: 1px solid var(--line);
 }
 .pills button {
@@ -182,8 +182,8 @@ input[type='search']:focus {
   color: var(--text);
 }
 .pills button[aria-checked='true'] {
-  background: rgba(0, 186, 188, 0.18);
-  color: #2ee6e8;
+  background: rgba(var(--ir-accent-rgb), 0.18);
+  color: var(--ir-accent-hi);
 }
 .pills .n {
   margin-left: 3px;
@@ -202,7 +202,7 @@ input[type='search']:focus {
   grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   gap: 4px 8px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: rgba(var(--ir-ink), 0.15) transparent;
 }
 .student {
   display: flex;
@@ -215,11 +215,11 @@ input[type='search']:focus {
   min-width: 0;
 }
 .student:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ir-ink), 0.05);
 }
 .student.current {
-  background: rgba(0, 186, 188, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(0, 186, 188, 0.4);
+  background: rgba(var(--ir-accent-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--ir-accent-rgb), 0.4);
 }
 .student.piscine,
 .student.blackholed {
@@ -242,7 +242,7 @@ input[type='search']:focus {
   height: 40px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #2a2d38 center / cover no-repeat;
+  background: var(--ir-surface-3) center / cover no-repeat;
 }
 .who {
   flex: 1;
@@ -285,7 +285,7 @@ input[type='search']:focus {
   height: 4px;
   margin-top: 5px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ir-ink), 0.07);
   overflow: hidden;
 }
 .bar i {
@@ -295,7 +295,7 @@ input[type='search']:focus {
   background: var(--accent);
 }
 .student.piscine .bar i {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(var(--ir-ink), 0.3);
 }
 .lv {
   flex: none;
@@ -311,7 +311,7 @@ input[type='search']:focus {
   line-height: 1.15;
 }
 .lv b.cc {
-  color: #2ee6e8;
+  color: var(--ir-accent-hi);
 }
 .lv b.none {
   color: var(--faint);

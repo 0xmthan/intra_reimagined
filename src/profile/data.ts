@@ -377,12 +377,46 @@ export async function saveFriend(login: string, add: boolean): Promise<{ friends
 
 // ---------- Intra Reimagined users (server: /v1/users/:login/ir, /v1/me/ir) ----------
 
-/** Whether `login` uses the extension (and, for yourself, whether you hid the badge); undefined = unknown. */
-export async function fetchIrUser(login: string): Promise<{ user: boolean; hidden?: boolean } | undefined> {
+export interface IrTheme {
+  mode: string;
+  accent: string;
+  /** Yours only: do visitors see it, and did you ever save one. */
+  share?: boolean;
+  saved?: boolean;
+}
+
+/**
+ * Whether `login` uses the extension, and their theme (someone else's only if they share it).
+ * For yourself, also whether you hid the badge. undefined = unknown.
+ */
+export async function fetchIrUser(login: string): Promise<{ user: boolean; hidden?: boolean; theme?: IrTheme } | undefined> {
   if (!IR_API) return undefined;
-  const j = await irGet<{ user: unknown; hidden?: unknown }>(`/v1/users/${encodeURIComponent(login)}/ir`, 'no-cache');
+  const j = await irGet<{ user: unknown; hidden?: unknown; theme?: Record<string, unknown> }>(`/v1/users/${encodeURIComponent(login)}/ir`, 'no-cache');
   if (!j || j === 'auth') return undefined;
-  return { user: j.user === true, hidden: typeof j.hidden === 'boolean' ? j.hidden : undefined };
+  const t = j.theme;
+  const theme =
+    t && typeof t.mode === 'string' && typeof t.accent === 'string'
+      ? { mode: t.mode, accent: t.accent, share: typeof t.share === 'boolean' ? t.share : undefined, saved: t.saved === true }
+      : undefined;
+  return { user: j.user === true, hidden: typeof j.hidden === 'boolean' ? j.hidden : undefined, theme };
+}
+
+/** Saves your theme (any of mode, accent, shareTheme) on the server; returns an error message on failure. */
+export async function saveIrTheme(t: { mode?: string; accent?: string; shareTheme?: boolean }): Promise<{ error?: string }> {
+  const token = await getToken();
+  if (!IR_API || !token) return { error: 'Log in with 42 first.' };
+  try {
+    const res = await fetch(`${IR_API}/v1/me/ir`, {
+      method: 'PUT',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(t),
+    });
+    if (res.status === 401) dropToken();
+    return res.ok ? {} : { error: `Couldn't save (${res.status}).` };
+  } catch {
+    return { error: "Couldn't reach the server. Try again." };
+  }
 }
 
 /** Hides (or shows again) your badge; returns an error message on failure. */

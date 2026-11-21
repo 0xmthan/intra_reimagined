@@ -20,10 +20,10 @@
   flex-direction: column;
   border-radius: 16px;
   background: rgba(22, 24, 30, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ir-ink), 0.12);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   overflow: hidden;
-  color: #e8eaf0;
+  color: var(--ir-text);
   animation: pop 0.14s ease-out;
 }
 .field {
@@ -31,8 +31,8 @@
   align-items: center;
   gap: 12px;
   padding: 0 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: #8b93a7;
+  border-bottom: 1px solid rgba(var(--ir-ink), 0.08);
+  color: var(--ir-muted);
 }
 .field svg {
   width: 20px;
@@ -50,12 +50,12 @@ input {
   color: #fff;
 }
 input::placeholder {
-  color: #6b7285;
+  color: var(--ir-faint);
 }
 kbd {
   font: 500 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #8b93a7;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ir-muted);
+  border: 1px solid rgba(var(--ir-ink), 0.14);
   border-radius: 6px;
   padding: 4px 6px;
 }
@@ -70,7 +70,7 @@ h4 {
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b7285;
+  color: var(--ir-faint);
 }
 .row {
   display: flex;
@@ -84,14 +84,14 @@ h4 {
   cursor: pointer;
 }
 .row.on {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ir-ink), 0.08);
   color: #fff;
 }
 .row.on::after {
   content: '↵';
   margin-left: auto;
   font-size: 13px;
-  color: #6b7285;
+  color: var(--ir-faint);
 }
 .pic {
   width: 28px;
@@ -107,13 +107,13 @@ h4 {
 }
 .sub {
   font-size: 13px;
-  color: #6b7285;
+  color: var(--ir-faint);
   white-space: nowrap;
 }
 .hint {
   padding: 14px 12px 4px;
   font-size: 14px;
-  color: #6b7285;
+  color: var(--ir-faint);
 }
 @keyframes fade {
   from {

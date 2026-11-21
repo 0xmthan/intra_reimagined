@@ -1,5 +1,71 @@
 /* Intra Reimagined: style tweaks layered on top of intra's own CSS. */
 
+/* ---------- theme tokens (theme.ts sets data-ir-mode / data-ir-accent; picked in settings.ts) ----------
+   Dark is the default. Light keeps intra's own light pages and recolors our UI with these; the
+   profile header stays dark either way (it sits on the banner picture). */
+:root {
+  --ir-bg: #0b0d11; /* the profile header's bottom, so the page continues it */
+  --ir-surface: #14171d;
+  --ir-surface-2: #1b1f27;
+  --ir-surface-3: #252a35;
+  --ir-border: rgba(255, 255, 255, 0.09);
+  --ir-text: #e2e4ea;
+  --ir-muted: #a1a7b5;
+  --ir-faint: #737a8a;
+  --ir-ink: 255, 255, 255; /* rgba(var(--ir-ink), a): lines, hovers, glass on our surfaces */
+  --ir-ink-text: 242, 244, 247;
+  --ir-glass-rgb: 16, 18, 24; /* blurred floating panels (friends) */
+  --ir-glass: rgba(16, 18, 24, 0.58);
+  --ir-ok-text: #6ee7a8; /* green as text: seats, "ok" values */
+
+  --ir-accent: #00babc;
+  --ir-accent-rgb: 0, 186, 188; /* for rgba(var(--ir-accent-rgb), a) */
+  --ir-accent-hi: #2ee6e8; /* brighter: highlights, strongest heat cells */
+  --ir-accent-soft: #4fd1d3; /* lighter: links on dark surfaces */
+}
+:root[data-ir-accent='green'] {
+  --ir-accent: #3ddc84;
+  --ir-accent-rgb: 61, 220, 132;
+  --ir-accent-hi: #74f0a8;
+  --ir-accent-soft: #6be3a0;
+}
+:root[data-ir-mode='light'] {
+  --ir-bg: #f4f5f7;
+  --ir-surface: #ffffff;
+  --ir-surface-2: #f3f4f7;
+  --ir-surface-3: #e6e8ee;
+  --ir-border: rgba(16, 20, 30, 0.11);
+  --ir-text: #1c2130;
+  --ir-muted: #5b6274;
+  --ir-faint: #868c9c;
+  --ir-ink: 16, 20, 30;
+  --ir-ink-text: 28, 33, 48;
+  --ir-glass-rgb: 248, 249, 251;
+  --ir-glass: rgba(248, 249, 251, 0.93);
+  --ir-ok-text: #15834a;
+  /* the bright variants read as text on white: go darker instead */
+  --ir-accent-hi: #00989a;
+  --ir-accent-soft: #00a5a7;
+}
+:root[data-ir-mode='light'][data-ir-accent='green'] {
+  --ir-accent: #2fc274;
+  --ir-accent-rgb: 47, 194, 116;
+  --ir-accent-hi: #1d9d58;
+  --ir-accent-soft: #23a862;
+}
+/* The header keeps the dark tokens in light mode. */
+:root[data-ir-mode='light'] #ir-hero {
+  --ir-surface: #14171d;
+  --ir-surface-2: #1b1f27;
+  --ir-surface-3: #252a35;
+  --ir-border: rgba(255, 255, 255, 0.09);
+  --ir-text: #e2e4ea;
+  --ir-muted: #a1a7b5;
+  --ir-faint: #737a8a;
+  --ir-ink: 255, 255, 255;
+  --ir-ink-text: 242, 244, 247;
+}
+
 /* ---------- 42 logo pinned to the top of the sidebar (see logo.ts) ---------- */
 #ir-logo {
   position: fixed;
@@ -64,7 +130,7 @@ html.ir-logo-pinned .main-navbar {
 
 /* ---------- our settings section (on intra's edit page) ---------- */
 .ir-setting-update {
-  color: #00babc;
+  color: var(--ir-accent);
 }
 
 .ir-setting-version {
@@ -77,9 +143,28 @@ html.ir-logo-pinned .main-navbar {
 
 .ir-setting-row { margin-top: 12px; }
 .ir-setting-check { display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer; }
-.ir-setting-check input { margin: 0; accent-color: #00babc; }
+.ir-setting-check input { margin: 0; accent-color: var(--ir-accent); }
 .ir-setting-help { margin: 4px 0 0 24px; color: #999; font-size: 13px; }
 .ir-setting-error { margin: 4px 0 0 24px; color: #e5534b; font-size: 13px; }
+
+.ir-setting-label { margin: 18px 0 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ir-muted); }
+.ir-themes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ir-theme {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px 9px 10px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 14px; color: var(--ir-text);
+  background: var(--ir-surface-2); border: 1px solid var(--ir-border);
+  transition: border-color 120ms, background 120ms;
+}
+.ir-theme:hover { border-color: rgba(var(--ir-ink), 0.25); }
+.ir-theme[aria-checked='true'] { border-color: var(--ir-accent); background: rgba(var(--ir-accent-rgb), 0.1); }
+.ir-theme:focus-visible { outline: 2px solid var(--ir-accent); outline-offset: 2px; }
+.ir-theme-swatch {
+  width: 22px; height: 22px; border-radius: 50%; flex: none;
+  background: var(--sw); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sw) 25%, transparent);
+}
+.ir-theme-swatch.mode { border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(var(--ir-ink), 0.2); }
+.ir-themes-soon { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ir-faint); margin-left: 4px; }
 
 /* Dark mode lives in dark.css. */
 
@@ -286,7 +371,7 @@ html.ir-no-topbar .page-sidebar > * {
   width: 32px;
   height: 1px;
   margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--ir-ink), 0.1);
 }
 #ir-side-tools .ir-tool {
   position: relative;
@@ -300,7 +385,7 @@ html.ir-no-topbar .page-sidebar > * {
   height: 48px;
   padding: 0;
   border-radius: 12px;
-  color: #8b93a7;
+  color: var(--ir-muted);
   font-size: 0;
   line-height: 1;
   transition: background 0.15s, color 0.15s;
@@ -309,7 +394,7 @@ html.ir-no-topbar .page-sidebar > * {
 #ir-side-tools .ir-tool > a:focus-visible,
 #ir-side-tools .ir-account > .dropdown.open > a,
 #ir-side-tools .ir-account > .dropdown > a:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ir-ink), 0.07);
   color: #fff;
   text-decoration: none;
 }
@@ -321,11 +406,11 @@ html.ir-no-topbar .page-sidebar > * {
   color: #e8818a;
 }
 /* Friends panel open (friends.ts). */
-#ir-side-tools #ir-friends-tool.on > a { background: rgba(0, 186, 188, 0.14); color: #2ee6e8; }
+#ir-side-tools #ir-friends-tool.on > a { background: rgba(var(--ir-accent-rgb), 0.14); color: var(--ir-accent-hi); }
 #ir-friends-toast {
   position: fixed; z-index: 3100; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
-  padding: 9px 16px; border-radius: 12px; background: rgba(20, 22, 29, 0.96); color: #f2f4f7;
-  border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 9px 16px; border-radius: 12px; background: rgba(20, 22, 29, 0.96); color: var(--ir-text);
+  border: 1px solid rgba(var(--ir-ink), 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   font: 14px futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
   opacity: 0; pointer-events: none; transition: opacity 0.18s, transform 0.18s;
 }
@@ -375,7 +460,7 @@ html.ir-no-topbar .page-sidebar > * {
   border-radius: 50%;
   background-size: cover;
   background-position: center;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(var(--ir-ink), 0.15);
 }
 #ir-side-tools .ir-account .dropdown-menu {
   top: auto;
@@ -426,7 +511,7 @@ html.ir-no-topbar .page-sidebar > * {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: #1c1f27;
+  background: var(--ir-surface-2);
   color: #fff;
   font-size: 13px;
   line-height: 1;
@@ -439,7 +524,7 @@ html.ir-no-topbar .page-sidebar > * {
 }
 #ir-side-tools .ir-tool-label kbd {
   padding: 2px 5px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(var(--ir-ink), 0.2);
   border-radius: 4px;
   background: none;
   box-shadow: none;
@@ -523,7 +608,7 @@ html.ir-embed .page-content .container-item {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ir-faint, #737a8a);
+  color: var(--ir-faint);
 }
 .overflowable-item > .ir-proj-head:first-child { margin-top: 2px; }
 #ir-home-marks[hidden], #ir-home-marks [hidden], #ir-home-recommended [hidden] { display: none !important; }
@@ -531,7 +616,7 @@ html.ir-embed .page-content .container-item {
 /* Marks rows: smaller than intra's default, closer to the rest of the card. */
 #ir-home-marks .project-item { font-size: 14px; line-height: 20px; padding: 4px 10px; }
 #ir-home-marks .marked-title, #ir-home-marks .marked-title a { font-size: 13.5px; line-height: 20px; }
-#ir-home-marks .project-item-lighteable { font-size: 12.5px; color: var(--ir-faint, #737a8a); margin-left: 4px; }
+#ir-home-marks .project-item-lighteable { font-size: 12.5px; color: var(--ir-faint); margin-left: 4px; }
 #ir-home-marks .main-project-item > .pull-right { font-size: 15px; font-weight: 600; }
 #ir-home-marks .main-project-item > .pull-right::before { font-size: 15px; }
 #ir-home-marks .collapsable .project-item, #ir-home-marks .collapsable .pull-right { font-size: 12.5px; }
@@ -540,29 +625,29 @@ html.ir-embed .page-content .container-item {
   display: inline-flex;
   padding: 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--ir-border, rgba(255, 255, 255, 0.09));
+  background: rgba(var(--ir-ink), 0.05);
+  border: 1px solid var(--ir-border);
 }
 .ir-sort button {
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: none;
-  color: var(--ir-muted, #a1a7b5);
+  color: var(--ir-muted);
   background: none;
   border: 0;
   border-radius: 999px;
   padding: 2px 10px;
   cursor: pointer;
 }
-.ir-sort button:hover { color: var(--ir-text, #e2e4ea); }
+.ir-sort button:hover { color: var(--ir-text); }
 /* Switches in card titles (Logtime's Heatmap | Calendar, Skills | Expertises): compact, so the
    title keeps its height. */
 .ir-home-grid h4.profile-title > .ir-lt-view,
 .ir-home-grid h4.profile-title > .ir-skills-tabs { flex-wrap: nowrap; gap: 0; height: 28px; padding: 2px; }
 .ir-lt-view button,
 .ir-skills-tabs button { height: 22px; line-height: 22px !important; padding: 0 12px !important; font-size: 12px !important; letter-spacing: 0.02em !important; }
-.ir-sort button[aria-checked="true"], .ir-sort button[aria-selected="true"] { background: rgba(0, 186, 188, 0.18); color: #00babc; }
+.ir-sort button[aria-checked="true"], .ir-sort button[aria-selected="true"] { background: rgba(var(--ir-accent-rgb), 0.18); color: var(--ir-accent); }
 
 /* ---------- home: Skills and Expertises in one card (profile/skills.ts) ---------- */
 /* Above the chart: its SVG reaches up over the header. */
@@ -572,18 +657,18 @@ html.ir-embed .page-content .container-item {
 .ir-expertises { display: flex; flex-direction: column; height: calc(100% - 50px); }
 .ir-expertises > .overflowable-item { flex: 1; overflow: auto; }
 .ir-expertises-links { display: flex; justify-content: flex-end; gap: 14px; padding-top: 8px; font-size: 12.5px; }
-.ir-expertises-links a { border: 0 !important; padding: 0 !important; text-transform: none !important; color: var(--ir-muted, #a1a7b5) !important; }
-.ir-expertises-links a:hover { color: var(--ir-text, #e2e4ea) !important; }
+.ir-expertises-links a { border: 0 !important; padding: 0 !important; text-transform: none !important; color: var(--ir-muted) !important; }
+.ir-expertises-links a:hover { color: var(--ir-text) !important; }
 
 /* Recommended projects (profile/projects.ts): like the in-progress rows, quieter. */
-.ir-rec-item { color: var(--ir-text, #e2e4ea) !important; opacity: 0.85; }
-.ir-rec-item:hover { opacity: 1; color: #00babc !important; }
+.ir-rec-item { color: var(--ir-text) !important; opacity: 0.85; }
+.ir-rec-item:hover { opacity: 1; color: var(--ir-accent) !important; }
 .ir-rec-more {
   margin: 2px 0 0 10px;
   padding: 2px 0;
   font: inherit;
   font-size: 12.5px;
-  color: #00babc;
+  color: var(--ir-accent);
   background: none;
   border: 0;
   cursor: pointer;
@@ -591,7 +676,7 @@ html.ir-embed .page-content .container-item {
 .ir-rec-more:hover { text-decoration: underline; }
 
 /* ---------- home Evaluations card: patronage reviews folded away (profile/evaluations.ts) ---------- */
-.ir-eval-empty { padding: 6px 10px; color: var(--ir-muted, #a1a7b5); font-size: 14px; }
+.ir-eval-empty { padding: 6px 10px; color: var(--ir-muted); font-size: 14px; }
 #ir-patronage-reviews { margin-top: 6px; }
 #ir-patronage-reviews > summary {
   display: flex;
@@ -612,7 +697,7 @@ html.ir-embed .page-content .container-item {
   transition: transform 140ms ease;
 }
 #ir-patronage-reviews[open] > summary::before { transform: rotate(45deg); }
-#ir-patronage-reviews > summary:hover { color: var(--ir-text, #e2e4ea); }
+#ir-patronage-reviews > summary:hover { color: var(--ir-text); }
 
 /* Open evaluation slots (evaluations.ts): plain text with a green dot, the card gets a green edge. */
 .ir-slots { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 2px; padding: 0 10px; }
@@ -626,7 +711,7 @@ html.ir-embed .page-content .container-item {
   line-height: 28px;
   white-space: nowrap;
 }
-.ir-slot > b { margin-right: 4px; font-weight: 400; color: var(--ir-muted, #a1a7b5); }
+.ir-slot > b { margin-right: 4px; font-weight: 400; color: var(--ir-muted); }
 .ir-slots > .ir-slot.same-day { margin-left: -4px; }
 .ir-slots > .ir-slot-label { margin-right: 2px; }
 .ir-slot-label > i { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2); }
@@ -634,7 +719,7 @@ html.ir-embed .page-content .container-item {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: var(--ir-text, #e2e4ea);
+  color: var(--ir-text);
   font-size: 13px;
   line-height: 28px;
   white-space: nowrap;
@@ -655,15 +740,15 @@ html.ir-embed .page-content .container-item {
   opacity: 0.7;
   cursor: pointer;
 }
-.ir-slot > button:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.ir-slot > button:hover { opacity: 1; background: rgba(var(--ir-ink), 0.1); }
 .ir-slot > button:disabled { opacity: 0.3; cursor: default; }
 .ir-slot-error { color: #ff8a8a; font-size: 12px; }
 
 /* ---------- home page layout (profile/home-grid.ts): cards sized to what they hold, header look ---------- */
 /* The first row (Logtime) is 356px at every width: room for its tiles and roomy heatmap / calendar squares. */
 .row.ir-home-grid {
-  --g-line: rgba(255, 255, 255, 0.09);
-  --g-muted: rgba(242, 244, 247, 0.66);
+  --g-line: rgba(var(--ir-ink), 0.09);
+  --g-muted: rgba(var(--ir-ink-text), 0.66);
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: 356px 430px 430px 430px;
@@ -705,11 +790,11 @@ html.ir-embed .page-content .container-item {
   margin: 0 !important;
   padding: 18px 20px !important;
   overflow: hidden !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.08) !important;
   border-radius: 18px !important;
   /* Glass, like the header's cards: lit from the top, the page showing through. */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  background: linear-gradient(180deg, rgba(var(--ir-ink), 0.055), rgba(var(--ir-ink), 0.018)) !important;
+  box-shadow: inset 0 1px 0 rgba(var(--ir-ink), 0.06) !important;
 }
 /* The dark theme paints boxes a solid grey (dark.css; its :is() list makes that rule very specific):
    keep it from showing under the glass. */
@@ -719,7 +804,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   min-height: 0;
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: rgba(var(--ir-ink), 0.15) transparent;
 }
 .ir-home-grid > [data-ir-card] > .container-inner-item > .overflowable-item { height: auto !important; max-height: none !important; }
 
@@ -746,7 +831,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   flex: none;
   width: 15px;
   height: 15px;
-  background: #00babc;
+  background: var(--ir-accent);
   -webkit-mask: center / contain no-repeat;
   mask: center / contain no-repeat;
 }
@@ -769,7 +854,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   padding: 4px 9px !important;
   border: 1px solid var(--g-line) !important;
   border-radius: 8px !important;
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(var(--ir-ink), 0.06) !important;
   color: var(--g-muted) !important;
   font-size: 12px !important;
   font-weight: 400 !important;
@@ -780,8 +865,8 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   box-shadow: none !important;
 }
 .ir-home-grid h4.profile-title :is(a.btn, a.simple-link, button.btn, .school-record-button):hover {
-  color: var(--ir-text, #e2e4ea) !important;
-  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--ir-text) !important;
+  background: rgba(var(--ir-ink), 0.12) !important;
 }
 .ir-home-grid h4.profile-title > .pull-right > .pull-right { display: contents; }
 /* A bare header link (Last achievements) also goes to the right. */
@@ -947,11 +1032,11 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ir-faint, #737a8a);
+  color: var(--ir-faint);
 }
 .ir-agenda .ir-agenda-day:first-child { margin-top: 0; }
 .ir-agenda .event-item {
-  --accent: #00babc;
+  --accent: var(--ir-accent);
   position: relative;
   display: flex !important;
   align-items: stretch;
@@ -960,9 +1045,9 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   height: auto !important;
   margin: 0 !important;
   padding: 10px 12px 10px 14px !important;
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.07) !important;
   border-radius: 12px !important;
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: rgba(var(--ir-ink), 0.03) !important;
   box-shadow: none !important;
   overflow: hidden;
   transition: background-color 140ms ease, border-color 140ms ease;
@@ -975,7 +1060,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   background: var(--accent);
 }
 .ir-agenda .event-item.ir-agenda-link { cursor: pointer; }
-.ir-agenda .event-item.ir-agenda-link:hover { background: rgba(255, 255, 255, 0.06) !important; border-color: rgba(255, 255, 255, 0.12) !important; }
+.ir-agenda .event-item.ir-agenda-link:hover { background: rgba(var(--ir-ink), 0.06) !important; border-color: rgba(var(--ir-ink), 0.12) !important; }
 .ir-agenda .event-item[data-event-kind='exam'] { --accent: #ff6b6b; }
 .ir-agenda .event-item[data-event-category='rush'] { --accent: #ff9a5c; }
 .ir-agenda .event-item[data-event-category='association'] { --accent: #8f9cff; }
@@ -998,22 +1083,22 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   background: none !important;
   border: 0 !important;
 }
-.ir-agenda .date-day { font-size: 22px !important; line-height: 1 !important; font-weight: 600; color: var(--ir-text, #e2e4ea) !important; }
-.ir-agenda .date-month { font-size: 11px !important; line-height: 1.4 !important; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent) !important; }
+.ir-agenda .date-day { font-size: 22px !important; line-height: 1 !important; font-weight: 600; color: var(--ir-text) !important; }
+.ir-agenda .date-month { font-size: 11px !important; line-height: 1.4 !important; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-ink, var(--accent)) !important; }
 
 .ir-agenda .event-main { flex: 1; min-width: 0; padding: 0 !important; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .ir-agenda .event-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin: 0 !important; line-height: 1.3; }
-.ir-agenda .event-name { font-size: 14.5px !important; font-weight: 600 !important; color: var(--ir-text, #e2e4ea) !important; text-transform: none !important; }
+.ir-agenda .event-name { font-size: 14.5px !important; font-weight: 600 !important; color: var(--ir-text) !important; text-transform: none !important; }
 .ir-agenda .event-name.ir-agenda-kind {
   order: -1;
   font-size: 10.5px !important;
   font-weight: 600 !important;
   letter-spacing: 0.06em;
   text-transform: uppercase !important;
-  color: var(--accent) !important;
+  color: var(--accent-ink, var(--accent)) !important;
 }
-.ir-agenda .event-subname { font-size: 14.5px !important; font-weight: 500; color: var(--ir-text, #e2e4ea) !important; flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ir-agenda .event-bottom { gap: 2px 14px; margin: 0 !important; font-size: 12.5px !important; color: var(--ir-muted, #a1a7b5) !important; }
+.ir-agenda .event-subname { font-size: 14.5px !important; font-weight: 500; color: var(--ir-text) !important; flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-agenda .event-bottom { gap: 2px 14px; margin: 0 !important; font-size: 12.5px !important; color: var(--ir-muted) !important; }
 .ir-agenda .event-bottom > div { display: inline-flex !important; align-items: center; gap: 4px; margin: 0 !important; padding: 0 !important; color: inherit !important; }
 .ir-agenda .event-bottom [class^='icon-'], .ir-agenda .event-bottom [class*=' icon-'] { font-size: 12px; opacity: 0.7; color: inherit !important; }
 .ir-agenda .event-theme { display: none; }
@@ -1024,9 +1109,9 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 .ir-agenda .event-metadata .copy .icon-link { width: auto !important; height: auto !important; font-size: 13px !important; line-height: 1 !important; }
 .ir-agenda .event-item .event-metadata, .ir-agenda .event-item:hover .event-metadata { background: none !important; box-shadow: none !important; }
 .ir-agenda .event-item .event-metadata .event-button.copy:not(:focus-visible) { outline: none !important; }
-.ir-agenda .event-item .event-metadata .event-button.copy:hover { background: rgba(255, 255, 255, 0.1) !important; color: var(--ir-text, #e2e4ea) !important; }
+.ir-agenda .event-item .event-metadata .event-button.copy:hover { background: rgba(var(--ir-ink), 0.1) !important; color: var(--ir-text) !important; }
 .ir-agenda .event-metadata .event-button:not(.copy) { display: none !important; }
-.ir-agenda .event-metadata .copy { opacity: 0; transition: opacity 140ms ease; color: var(--ir-muted, #a1a7b5) !important; background: none !important; border: 0 !important; padding: 2px !important; }
+.ir-agenda .event-metadata .copy { opacity: 0; transition: opacity 140ms ease; color: var(--ir-muted) !important; background: none !important; border: 0 !important; padding: 2px !important; }
 .ir-agenda .event-item:hover .event-metadata .copy { opacity: 1; }
 
 /* Registered / Full: pills. */
@@ -1040,15 +1125,15 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: var(--ir-muted, #a1a7b5) !important;
+  background: rgba(var(--ir-ink), 0.08) !important;
+  color: var(--ir-muted) !important;
 }
 .ir-agenda .event-overflow > .event-registered { background: rgba(61, 220, 132, 0.14) !important; color: #3ddc84 !important; }
 .ir-agenda .event-overflow > .event-full { background: rgba(255, 107, 107, 0.14) !important; color: #ff7a7a !important; }
 
 /* ---------- event / exam popup (intra's #smartModal), in the cards' style ---------- */
 #smartModal:is(.event-modal, .exam-modal) {
-  --accent: #00babc;
+  --accent: var(--ir-accent);
 }
 #smartModal:is(.event-modal, .exam-modal):has(.head[data-event-category='association']) { --accent: #8f9cff; }
 #smartModal:is(.event-modal, .exam-modal):has(.head:is([data-event-category='pedago'], [data-event-category='piscine'])) { --accent: #f5c451; }
@@ -1062,9 +1147,9 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 #smartModal:is(.event-modal, .exam-modal) .modal-dialog { width: min(640px, calc(100vw - 32px)); margin: 8vh auto; }
 #smartModal:is(.event-modal, .exam-modal) .modal-content {
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.09) !important;
   border-radius: 18px !important;
-  background: #14171d !important;
+  background: var(--ir-surface) !important;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5) !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-header {
@@ -1077,14 +1162,14 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   padding: 22px 26px 12px !important;
   text-align: left !important;
   background: none !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  color: var(--ir-text) !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .head .kind {
   font-size: 11.5px !important;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent) !important;
+  color: var(--accent-ink, var(--accent)) !important;
   opacity: 1 !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .head h4 {
@@ -1094,15 +1179,15 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   font-weight: 600 !important;
   line-height: 1.25;
   text-transform: none !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  color: var(--ir-text) !important;
 }
-#smartModal:is(.event-modal, .exam-modal) .head small { font-size: 13px !important; color: var(--ir-muted, #a1a7b5) !important; }
+#smartModal:is(.event-modal, .exam-modal) .head small { font-size: 13px !important; color: var(--ir-muted) !important; }
 #smartModal:is(.event-modal, .exam-modal) .details {
   justify-content: flex-start !important;
   gap: 8px;
   padding: 4px 26px 18px !important;
   background: none !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  color: var(--ir-text) !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .details .event-meta-item {
   display: inline-flex !important;
@@ -1111,19 +1196,19 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   margin: 0 !important;
   padding: 5px 12px !important;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ir-ink), 0.06) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.07);
   font-size: 13px !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  color: var(--ir-text) !important;
 }
-#smartModal:is(.event-modal, .exam-modal) .details .event-meta-item [class^='icon-'] { color: var(--accent) !important; font-size: 13px; }
+#smartModal:is(.event-modal, .exam-modal) .details .event-meta-item [class^='icon-'] { color: var(--accent-ink, var(--accent)) !important; font-size: 13px; }
 #smartModal:is(.event-modal, .exam-modal) .details .event-difficulty:has(span:last-child:empty) { display: none !important; }
 #smartModal:is(.event-modal, .exam-modal) .modal-body {
   padding: 18px 26px !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(var(--ir-ink), 0.07);
   font-size: 15px;
   line-height: 1.55;
-  color: var(--ir-text, #e2e4ea) !important;
+  color: var(--ir-text) !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-body .notification-text { margin: 0 0 10px; color: inherit !important; }
 #smartModal:is(.event-modal, .exam-modal) .modal-body .event-themes:empty { display: none; }
@@ -1132,7 +1217,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 26px 18px !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-top: 1px solid rgba(var(--ir-ink), 0.07) !important;
   background: none !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer::before,
@@ -1147,11 +1232,11 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   box-shadow: none !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer .btn-default {
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background: rgba(255, 255, 255, 0.06) !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.1) !important;
+  background: rgba(var(--ir-ink), 0.06) !important;
+  color: var(--ir-text) !important;
 }
-#smartModal:is(.event-modal, .exam-modal) .modal-footer .btn-default:hover { background: rgba(255, 255, 255, 0.12) !important; }
+#smartModal:is(.event-modal, .exam-modal) .modal-footer .btn-default:hover { background: rgba(var(--ir-ink), 0.12) !important; }
 /* Unsubscribe: quiet red; Subscribe: the accent. */
 #smartModal:is(.event-modal, .exam-modal) .modal-footer .btn-warning,
 #smartModal:is(.event-modal, .exam-modal) .modal-footer .btn-danger {
@@ -1162,24 +1247,24 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 #smartModal:is(.event-modal, .exam-modal) .modal-footer :is(.btn-warning, .btn-danger):hover { background: rgba(255, 107, 107, 0.22) !important; }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer :is(.btn-primary, .btn-success) {
   border: 0 !important;
-  background: #00babc !important;
+  background: var(--ir-accent) !important;
   color: #fff !important;
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer :is(.btn.disabled, .btn[disabled]) {
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  color: var(--ir-faint, #737a8a) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.07) !important;
+  background: rgba(var(--ir-ink), 0.03) !important;
+  color: var(--ir-faint) !important;
   opacity: 1 !important;
   cursor: default;
 }
 
 /* ---------- Manage slots page (slots.ts): intra's FullCalendar, restyled ---------- */
 html.ir-slots-page {
-  --sl-line: rgba(255, 255, 255, 0.06);
-  --sl-line-strong: rgba(255, 255, 255, 0.1);
-  --sl-muted: var(--ir-muted, #8b93a7);
-  --sl-text: var(--ir-text, #e2e4ea);
-  --sl-accent: #00babc;
+  --sl-line: rgba(var(--ir-ink), 0.06);
+  --sl-line-strong: rgba(var(--ir-ink), 0.1);
+  --sl-muted: var(--ir-muted);
+  --sl-text: var(--ir-text);
+  --sl-accent: var(--ir-accent);
   --sl-open: #4ade80;
 }
 html.ir-slots-page .page-content .container-item:has(#calendar) {
@@ -1203,8 +1288,8 @@ html.ir-slots-page .page-content .container-item:has(#calendar) {
 .ir-key { display: inline-flex; align-items: center; gap: 6px; }
 .ir-key::before { content: ''; width: 10px; height: 10px; border-radius: 3px; }
 .ir-key.open::before { background: rgba(74, 222, 128, 0.25); box-shadow: inset 3px 0 0 var(--sl-open); }
-.ir-key.booked::before { background: rgba(0, 186, 188, 0.3); box-shadow: inset 3px 0 0 var(--sl-accent); }
-.ir-key.closed::before { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0 3px, transparent 3px 6px); }
+.ir-key.booked::before { background: rgba(var(--ir-accent-rgb), 0.3); box-shadow: inset 3px 0 0 var(--sl-accent); }
+.ir-key.closed::before { background: repeating-linear-gradient(135deg, rgba(var(--ir-ink), 0.12) 0 3px, transparent 3px 6px); }
 
 /* Toolbar: the week on the left, the buttons as one segmented control on the right. */
 html.ir-slots-page #calendar .fc-toolbar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px !important; }
@@ -1225,7 +1310,7 @@ html.ir-slots-page #calendar .fc-button {
   margin: 0 !important;
   border: 1px solid var(--sl-line-strong) !important;
   border-radius: 9px !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(var(--ir-ink), 0.05) !important;
   color: var(--sl-text) !important;
   font-size: 13px !important;
   text-transform: capitalize;
@@ -1233,7 +1318,7 @@ html.ir-slots-page #calendar .fc-button {
   box-shadow: none !important;
   opacity: 1;
 }
-html.ir-slots-page #calendar .fc-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1) !important; }
+html.ir-slots-page #calendar .fc-button:hover:not(:disabled) { background: rgba(var(--ir-ink), 0.1) !important; }
 html.ir-slots-page #calendar .fc-button:disabled { color: var(--sl-muted) !important; opacity: 0.55 !important; cursor: default; }
 html.ir-slots-page #calendar :is(.fc-prev-button, .fc-next-button) { padding: 0 !important; width: 32px; }
 html.ir-slots-page #calendar .fc-icon { height: auto; font-size: 18px; line-height: 1; top: 0; margin: 0; }
@@ -1243,19 +1328,19 @@ html.ir-slots-page #calendar .fc-view-container {
   border: 1px solid var(--sl-line-strong);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(var(--ir-ink), 0.015);
 }
 html.ir-slots-page #calendar :is(td, th, .fc-row, thead, tbody, .fc-divider, hr) { border-color: var(--sl-line) !important; }
 html.ir-slots-page #calendar .fc-view > table { border: 0; }
 html.ir-slots-page #calendar .fc-view > table > :is(thead, tbody) > tr > td { border-width: 0 !important; }
-html.ir-slots-page #calendar .fc-slats tr.fc-minor td { border-top-style: dashed !important; border-top-color: rgba(255, 255, 255, 0.035) !important; }
+html.ir-slots-page #calendar .fc-slats tr.fc-minor td { border-top-style: dashed !important; border-top-color: rgba(var(--ir-ink), 0.035) !important; }
 html.ir-slots-page #calendar .fc-slats td { height: 22px; }
 html.ir-slots-page #calendar .fc-axis { color: var(--sl-muted) !important; font-size: 11px !important; vertical-align: top !important; padding: 0 10px 0 4px !important; text-align: right; }
 html.ir-slots-page #calendar .fc-slats .fc-axis > span { position: relative; top: -8px; }
 html.ir-slots-page #calendar .fc-slats tr:first-child .fc-axis > span { visibility: hidden; }
 html.ir-slots-page #calendar .fc-slats .fc-axis { border-color: transparent !important; }
-html.ir-slots-page #calendar .fc-day.fc-today { background: rgba(0, 186, 188, 0.05) !important; }
-html.ir-slots-page #calendar .fc-day.fc-past { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.018) 0 6px, transparent 6px 12px) !important; }
+html.ir-slots-page #calendar .fc-day.fc-today { background: rgba(var(--ir-accent-rgb), 0.05) !important; }
+html.ir-slots-page #calendar .fc-day.fc-past { background: repeating-linear-gradient(135deg, rgba(var(--ir-ink), 0.018) 0 6px, transparent 6px 12px) !important; }
 
 /* Day headers: "THU" over a big "19"; today's number in a filled circle. */
 html.ir-slots-page #calendar th.fc-day-header {
@@ -1296,12 +1381,12 @@ html.ir-slots-page #calendar .fc-event .fc-content { padding: 4px 6px 4px 9px; }
 html.ir-slots-page #calendar .fc-event .fc-time { font-weight: 600; font-size: 12px; }
 html.ir-slots-page #calendar .fc-event .fc-title { opacity: 0.85; }
 html.ir-slots-page #calendar .fc-event.reserved {
-  background: rgba(0, 186, 188, 0.2) !important;
-  box-shadow: inset 3px 0 0 var(--sl-accent), 0 0 0 1px rgba(0, 186, 188, 0.3) inset !important;
+  background: rgba(var(--ir-accent-rgb), 0.2) !important;
+  box-shadow: inset 3px 0 0 var(--sl-accent), 0 0 0 1px rgba(var(--ir-accent-rgb), 0.3) inset !important;
   color: #a5f3f4 !important;
 }
 html.ir-slots-page #calendar .fc-event.closed {
-  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0 5px, rgba(255, 255, 255, 0.02) 5px 10px) !important;
+  background: repeating-linear-gradient(135deg, rgba(var(--ir-ink), 0.07) 0 5px, rgba(var(--ir-ink), 0.02) 5px 10px) !important;
   box-shadow: none !important;
   color: var(--sl-muted) !important;
 }
@@ -1315,13 +1400,13 @@ html.ir-slots-page #calendar .fc-event .delete {
   opacity: 0.6;
   cursor: pointer;
 }
-html.ir-slots-page #calendar .fc-event .delete:hover { opacity: 1; background: rgba(255, 255, 255, 0.15); }
+html.ir-slots-page #calendar .fc-event .delete:hover { opacity: 1; background: rgba(var(--ir-ink), 0.15); }
 html.ir-slots-page #calendar .fc-event .fc-resizer { height: 8px; cursor: ns-resize; }
 html.ir-slots-page #calendar .fc-event .fc-resizer::after { content: ''; display: block; width: 18px; height: 2px; margin: 3px auto 0; border-radius: 2px; background: currentColor; opacity: 0.4; }
 /* Dragging out a new slot. */
 html.ir-slots-page #calendar :is(.fc-highlight, .fc-helper) {
-  background: rgba(0, 186, 188, 0.18) !important;
-  border: 1px dashed rgba(0, 186, 188, 0.6) !important;
+  background: rgba(var(--ir-accent-rgb), 0.18) !important;
+  border: 1px dashed rgba(var(--ir-accent-rgb), 0.6) !important;
   border-radius: 8px !important;
   opacity: 1 !important;
 }
@@ -1373,7 +1458,7 @@ html.ir-slots-page.ir-embed .page-content .container-item:has(#calendar) { margi
 
 /* The family tree on a glass card: its edge fades and avatar rings use the color the glass comes out
    as over the page (top of the card a little lighter than the bottom). */
-.ir-home-grid ir-family-tree { --tree-bg: #15171b; --tree-bg-up: #17191d; --tree-bg-down: #121418; }
+.ir-home-grid ir-family-tree { --tree-bg: var(--ir-surface-2); --tree-bg-up: var(--ir-surface-2); --tree-bg-down: var(--ir-surface); }
 
 /* Popups' backdrop (event viewer and other intra modals): a light dim and blur like our Clusters
    window, not a near-solid sheet (the dark theme tags it as a box and intra makes it 95% opaque). */
@@ -1387,12 +1472,12 @@ html.ir-dark .modal.in:has(.modal-dialog) { backdrop-filter: blur(4px); }
 /* ---------- main sidebar: themed in place (same items, same spots) ---------- */
 html.ir-dark .main-left-navbar { background: linear-gradient(180deg, #13161c, #0e1015) !important; }
 html.ir-dark #ir-logo { background: #13161c !important; }
-html.ir-dark .main-left-navbar { box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06) !important; }
-html.ir-dark #ir-logo { box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06) !important; }
+html.ir-dark .main-left-navbar { box-shadow: inset -1px 0 0 rgba(var(--ir-ink), 0.06) !important; }
+html.ir-dark #ir-logo { box-shadow: inset -1px 0 0 rgba(var(--ir-ink), 0.06) !important; }
 /* Each item: the icon on a soft rounded tile, like the tools at the bottom. */
 html.ir-dark .main-left-navbar > ._ > li > a {
   position: relative;
-  color: #8b93a7 !important;
+  color: var(--ir-muted) !important;
   background: none !important;
   border: 0 !important;
   transition: color 0.15s;
@@ -1408,12 +1493,12 @@ html.ir-dark .main-left-navbar > ._ > li > a::before {
 }
 html.ir-dark .main-left-navbar > ._ > li > a > :not(.visible-overlay) { position: relative; z-index: 1; }
 html.ir-dark .main-left-navbar > ._ > li > a:hover { color: #fff !important; text-decoration: none; }
-html.ir-dark .main-left-navbar > ._ > li > a:hover::before { background: rgba(255, 255, 255, 0.07); }
+html.ir-dark .main-left-navbar > ._ > li > a:hover::before { background: rgba(var(--ir-ink), 0.07); }
 /* The page you're on: teal icon on a teal-tinted tile, with a small bar at the edge. */
-html.ir-dark .main-left-navbar > ._ > li > a.active { color: #00babc !important; }
+html.ir-dark .main-left-navbar > ._ > li > a.active { color: var(--ir-accent) !important; }
 html.ir-dark .main-left-navbar > ._ > li > a.active::before {
-  background: rgba(0, 186, 188, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(0, 186, 188, 0.22);
+  background: rgba(var(--ir-accent-rgb), 0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--ir-accent-rgb), 0.22);
 }
 html.ir-dark .main-left-navbar > ._ > li > a.active::after {
   content: '';
@@ -1423,7 +1508,7 @@ html.ir-dark .main-left-navbar > ._ > li > a.active::after {
   bottom: 28px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: #00babc;
+  background: var(--ir-accent);
 }
 /* Hover labels, like the tools' (intra hides its own). */
 html.ir-dark .main-left-navbar > ._ > li > a > .visible-overlay {
@@ -1434,7 +1519,7 @@ html.ir-dark .main-left-navbar > ._ > li > a > .visible-overlay {
   display: none !important;
   padding: 6px 10px;
   border-radius: 8px;
-  background: #1c1f27;
+  background: var(--ir-surface-2);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   color: #fff;
   font-size: 13px;
@@ -1450,36 +1535,36 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 /* ---------- Achievements card (profile/achievements.ts): progress, then everything earned ---------- */
 .ir-ach { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; gap: 12px; margin-top: 4px; }
 .ir-ach-head { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 4px 10px; }
-.ir-ach-count { font-size: 13px; color: var(--ir-muted, #a1a7b5); }
-.ir-ach-count b { font-size: 22px; font-weight: 600; color: var(--ir-text, #e2e4ea); margin-right: 2px; }
-.ir-ach-pct { grid-column: 3; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
-.ir-ach-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
-.ir-ach-bar > i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00babc, #3ddc84); }
-.ir-ach-tiers { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 2px; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
-.ir-ach-tiers b { font-weight: 600; color: var(--ir-text, #e2e4ea); }
+.ir-ach-count { font-size: 13px; color: var(--ir-muted); }
+.ir-ach-count b { font-size: 22px; font-weight: 600; color: var(--ir-text); margin-right: 2px; }
+.ir-ach-pct { grid-column: 3; font-size: 12px; color: var(--ir-muted); }
+.ir-ach-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(var(--ir-ink), 0.07); overflow: hidden; }
+.ir-ach-bar > i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--ir-accent), #3ddc84); }
+.ir-ach-tiers { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 2px; font-size: 12px; color: var(--ir-muted); }
+.ir-ach-tiers b { font-weight: 600; color: var(--ir-text); }
 .ir-tier { display: inline-flex; align-items: center; gap: 5px; }
 .ir-tier::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--t); box-shadow: 0 0 0 2px color-mix(in srgb, var(--t) 25%, transparent); }
 .ir-tier.bronze { --t: #cd8a4f; }
-.ir-tier.silver { --t: #c4ccd8; }
+.ir-tier.silver { --t: var(--ir-muted); }
 .ir-tier.gold { --t: #f5c451; }
 .ir-tier.platinum { --t: #8fe3ff; }
 .ir-tier.dot { margin-left: 7px; vertical-align: 1px; }
 .ir-tier.dot::before { width: 6px; height: 6px; box-shadow: none; }
 .ir-ach-list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ir-ach-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 7px 8px; margin: 0; border-radius: 10px; }
-.ir-ach-row:hover { background: rgba(255, 255, 255, 0.04); }
-.ir-ach-badge { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.ir-ach-row:hover { background: rgba(var(--ir-ink), 0.04); }
+.ir-ach-badge { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 12px; background: rgba(var(--ir-ink), 0.05); }
 .ir-ach-badge img { width: 44px; height: 44px; object-fit: contain; }
 .ir-ach-text { min-width: 0; }
-.ir-ach-name { font-size: 13.5px; color: var(--ir-text, #e2e4ea); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ir-ach-desc { font-size: 11.5px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ir-ach-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; }
+.ir-ach-name { font-size: 13.5px; color: var(--ir-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ir-ach-desc { font-size: 11.5px; color: var(--ir-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ir-ach-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted); white-space: nowrap; }
 .ir-ach-reward { color: #f5c451; }
-.ir-ach-listhead { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ir-muted, #a1a7b5); margin-bottom: -4px; }
+.ir-ach-listhead { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ir-muted); margin-bottom: -4px; }
 /* Rarity: a series is a stack, its top level a card with the cards under it peeking out. */
 .ir-ach-stack { position: relative; margin: 2px 0 12px; }
 .ir-ach-stack.bronze { --t: #cd8a4f; }
-.ir-ach-stack.silver { --t: #c4ccd8; }
+.ir-ach-stack.silver { --t: var(--ir-muted); }
 .ir-ach-stack.gold { --t: #f5c451; }
 .ir-ach-stack.platinum { --t: #8fe3ff; }
 .ir-ach-stack:not(.open)::before,
@@ -1491,8 +1576,8 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
   bottom: -5px;
   height: 12px;
   border-radius: 0 0 12px 12px;
-  background: color-mix(in srgb, var(--t, #8b93a7) 8%, #17191e);
-  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 20%, rgba(255, 255, 255, 0.05));
+  background: color-mix(in srgb, var(--t, var(--ir-muted)) 8%, var(--ir-surface-2));
+  border: 1px solid color-mix(in srgb, var(--t, var(--ir-muted)) 20%, rgba(var(--ir-ink), 0.05));
   border-top: 0;
 }
 .ir-ach-stack:not(.open)::after { left: 18px; right: 18px; bottom: -10px; opacity: 0.6; z-index: -1; }
@@ -1502,24 +1587,24 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
   z-index: 1;
   grid-template-columns: 52px 1fr auto 14px;
   margin: 0;
-  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 28%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--t, var(--ir-muted)) 28%, rgba(var(--ir-ink), 0.06));
   border-radius: 12px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--t, #8b93a7) 10%, #17191e), #16181d);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--t, var(--ir-muted)) 10%, var(--ir-surface-2)), var(--ir-surface-2));
   cursor: pointer;
 }
-.ir-ach-list .ir-ach-row.ir-ach-stackhead:hover { border-color: color-mix(in srgb, var(--t, #8b93a7) 50%, transparent); }
+.ir-ach-list .ir-ach-row.ir-ach-stackhead:hover { border-color: color-mix(in srgb, var(--t, var(--ir-muted)) 50%, transparent); }
 .ir-ach-levels {
   margin-left: 8px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ir-ink), 0.07);
   font-size: 10.5px;
-  color: var(--ir-muted, #a1a7b5);
+  color: var(--ir-muted);
   vertical-align: 1px;
 }
-.ir-ach-chev { width: 7px; height: 7px; border-right: 1.5px solid var(--ir-muted, #a1a7b5); border-bottom: 1.5px solid var(--ir-muted, #a1a7b5); transform: rotate(45deg); margin-bottom: 4px; transition: transform 0.15s; }
+.ir-ach-chev { width: 7px; height: 7px; border-right: 1.5px solid var(--ir-muted); border-bottom: 1.5px solid var(--ir-muted); transform: rotate(45deg); margin-bottom: 4px; transition: transform 0.15s; }
 .ir-ach-stack.open .ir-ach-chev { transform: rotate(-135deg); margin: 4px 0 0; }
-.ir-ach-stackbody { margin: 2px 0 0 26px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--t, #8b93a7) 30%, transparent); }
+.ir-ach-stackbody { margin: 2px 0 0 26px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--t, var(--ir-muted)) 30%, transparent); }
 .ir-ach-stackbody .ir-ach-row { margin-left: 0; }
 /* Pinned achievements: two larger cards above the progress. */
 .ir-ach-pinned { display: flex; flex-direction: column; gap: 8px; }
@@ -1531,13 +1616,13 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--t, #8b93a7) 35%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--t, var(--ir-muted)) 35%, rgba(var(--ir-ink), 0.06));
   border-radius: 14px;
-  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--t, #8b93a7) 18%, transparent), transparent 60%), #16181d;
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--t, var(--ir-muted)) 18%, transparent), transparent 60%), var(--ir-surface-2);
   min-width: 0;
 }
 .ir-ach-pincard.bronze { --t: #cd8a4f; }
-.ir-ach-pincard.silver { --t: #c4ccd8; }
+.ir-ach-pincard.silver { --t: var(--ir-muted); }
 .ir-ach-pincard.gold { --t: #f5c451; }
 .ir-ach-pincard.platinum { --t: #8fe3ff; }
 .ir-ach-pincard .ir-ach-badge { width: 56px; height: 56px; border-radius: 14px; }
@@ -1545,7 +1630,7 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 .ir-ach-pincard .ir-ach-pin { position: absolute; top: 6px; right: 6px; }
 .ir-ach-pincard .ir-ach-text { padding-right: 24px; }
 .ir-ach-pincard .ir-ach-desc { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.ir-ach-pincard .ir-ach-when { font-size: 11px; color: var(--ir-faint, #737a8a); margin-top: 2px; }
+.ir-ach-pincard .ir-ach-when { font-size: 11px; color: var(--ir-faint); margin-top: 2px; }
 /* Pin button: shows on hover; filled teal when pinned. */
 .ir-ach-pin {
   display: grid;
@@ -1556,15 +1641,15 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
   border: 0;
   border-radius: 8px;
   background: none;
-  color: var(--ir-muted, #a1a7b5);
+  color: var(--ir-muted);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s, background 0.12s;
 }
 .ir-ach-pin svg { width: 15px; height: 15px; }
 .ir-ach-row:hover .ir-ach-pin, .ir-ach-pincard:hover .ir-ach-pin, .ir-ach-pin:focus-visible, .ir-ach-pin[aria-pressed='true'] { opacity: 1; }
-.ir-ach-pin:hover { background: rgba(255, 255, 255, 0.08); color: var(--ir-text, #e2e4ea); }
-.ir-ach-pin[aria-pressed='true'] { color: #00babc; }
+.ir-ach-pin:hover { background: rgba(var(--ir-ink), 0.08); color: var(--ir-text); }
+.ir-ach-pin[aria-pressed='true'] { color: var(--ir-accent); }
 .ir-ach-pin[aria-pressed='true'] svg { fill: currentColor; }
 .ir-ach-row:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px; }
 .ir-ach-list .ir-ach-row.ir-ach-stackhead:has(> .ir-ach-pin) { grid-template-columns: 52px 1fr auto 26px 14px; }
@@ -1572,23 +1657,23 @@ html.ir-no-topbar #ir-logo { z-index: 1001 !important; }
 
 /* ---------- achievements page (profile/achievements-page.ts) ---------- */
 html.ir-achp-page .achievements-container { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
-.ir-ap { padding: 24px 28px 40px; color: var(--ir-text, #e2e4ea); }
+.ir-ap { padding: 24px 28px 40px; color: var(--ir-text); }
 .ir-ap-top {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: baseline;
   gap: 10px 16px;
   padding: 22px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ir-ink), 0.08);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  background: linear-gradient(180deg, rgba(var(--ir-ink), 0.055), rgba(var(--ir-ink), 0.018));
 }
 .ir-ap-big b { font-size: 40px; font-weight: 600; line-height: 1; }
-.ir-ap-big span { font-size: 15px; color: var(--ir-muted, #a1a7b5); }
-.ir-ap-pct { font-size: 18px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-big span { font-size: 15px; color: var(--ir-muted); }
+.ir-ap-pct { font-size: 18px; color: var(--ir-muted); }
 .ir-ap-top .ir-ach-bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; }
-.ir-ap-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ir-muted, #a1a7b5); }
-.ir-ap-stats b { font-weight: 600; color: var(--ir-text, #e2e4ea); }
+.ir-ap-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ir-muted); }
+.ir-ap-stats b { font-weight: 600; color: var(--ir-text); }
 .ir-ap-wallet { color: #f5c451; }
 
 .ir-ap-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 20px 0 16px; }
@@ -1598,85 +1683,85 @@ html.ir-achp-page .achievements-container { background: none !important; border:
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--ir-ink), 0.08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--ir-muted, #a1a7b5);
+  background: rgba(var(--ir-ink), 0.04);
+  color: var(--ir-muted);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .ir-ap-tabs button span { font-size: 11px; opacity: 0.7; }
-.ir-ap-tabs button:hover { color: var(--ir-text, #e2e4ea); background: rgba(255, 255, 255, 0.08); }
-.ir-ap-tabs button[aria-selected='true'] { background: rgba(0, 186, 188, 0.16); border-color: rgba(0, 186, 188, 0.35); color: #00babc; }
+.ir-ap-tabs button:hover { color: var(--ir-text); background: rgba(var(--ir-ink), 0.08); }
+.ir-ap-tabs button[aria-selected='true'] { background: rgba(var(--ir-accent-rgb), 0.16); border-color: rgba(var(--ir-accent-rgb), 0.35); color: var(--ir-accent); }
 .ir-ap-tools .ir-sort button { font-size: 12px; padding: 4px 12px; }
 .ir-ap-search {
   width: 220px;
   height: 34px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(var(--ir-ink), 0.1) !important;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--ir-text, #e2e4ea) !important;
+  background: rgba(var(--ir-ink), 0.04) !important;
+  color: var(--ir-text) !important;
   font: inherit;
   font-size: 13px;
   outline: none;
 }
-.ir-ap-search:focus { border-color: rgba(0, 186, 188, 0.5) !important; }
+.ir-ap-search:focus { border-color: rgba(var(--ir-accent-rgb), 0.5) !important; }
 
 .ir-ap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
 .ir-ap-card {
-  --t: #8b93a7;
+  --t: var(--ir-muted);
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--t) 22%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--t) 22%, rgba(var(--ir-ink), 0.06));
   border-radius: 16px;
-  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--t) 12%, transparent), transparent 55%), rgba(255, 255, 255, 0.025);
+  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--t) 12%, transparent), transparent 55%), rgba(var(--ir-ink), 0.025);
   transition: border-color 0.15s, transform 0.15s;
 }
 .ir-ap-card[hidden] { display: none; }
 .ir-ap-card.bronze { --t: #cd8a4f; }
-.ir-ap-card.silver { --t: #c4ccd8; }
+.ir-ap-card.silver { --t: var(--ir-muted); }
 .ir-ap-card.gold { --t: #f5c451; }
 .ir-ap-card.platinum { --t: #8fe3ff; }
 .ir-ap-card.series { cursor: pointer; }
 .ir-ap-card.series:hover { border-color: color-mix(in srgb, var(--t) 50%, transparent); }
-.ir-ap-card.locked { --t: #6b7280; background: rgba(255, 255, 255, 0.015); }
+.ir-ap-card.locked { --t: var(--ir-faint); background: rgba(var(--ir-ink), 0.015); }
 .ir-ap-card.locked .ir-ap-cardhead .ir-ap-badge img { filter: grayscale(1); opacity: 0.45; }
-.ir-ap-card.locked h3 { color: var(--ir-muted, #a1a7b5); }
+.ir-ap-card.locked h3 { color: var(--ir-muted); }
 .ir-ap-cardhead { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; }
-.ir-ap-badge { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 14px; background: rgba(255, 255, 255, 0.05); }
+.ir-ap-badge { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 14px; background: rgba(var(--ir-ink), 0.05); }
 .ir-ap-badge img { width: 54px; height: 54px; object-fit: contain; }
 .ir-ap-badge.sm { width: 40px; height: 40px; border-radius: 10px; }
 .ir-ap-badge.sm img { width: 32px; height: 32px; }
 .ir-ap-cardtext { min-width: 0; }
-.ir-ap-card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ir-text, #e2e4ea); }
-.ir-ap-desc { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ir-text); }
+.ir-ap-desc { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ir-muted); }
 .ir-ap-pips { display: flex; align-items: center; gap: 4px; margin: 2px 0 6px; }
-.ir-ap-pips i { width: 16px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.ir-ap-pips i { width: 16px; height: 5px; border-radius: 3px; background: rgba(var(--ir-ink), 0.1); }
 .ir-ap-pips i.on { background: var(--t); }
 .ir-ap-pips i.on.bronze { background: #cd8a4f; }
-.ir-ap-pips i.on.silver { background: #c4ccd8; }
+.ir-ap-pips i.on.silver { background: var(--ir-muted); }
 .ir-ap-pips i.on.gold { background: #f5c451; }
 .ir-ap-pips i.on.platinum { background: #8fe3ff; }
-.ir-ap-pips span { margin-left: 6px; font-size: 11px; color: var(--ir-muted, #a1a7b5); }
-.ir-ap-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; color: var(--ir-muted, #a1a7b5); }
+.ir-ap-pips span { margin-left: 6px; font-size: 11px; color: var(--ir-muted); }
+.ir-ap-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; color: var(--ir-muted); }
 .ir-ap-earned { color: #3ddc84; }
-.ir-ap-lockedtag { color: var(--ir-faint, #737a8a); }
+.ir-ap-lockedtag { color: var(--ir-faint); }
 .ir-ap-title { padding: 1px 8px; border-radius: 999px; background: rgba(199, 125, 255, 0.14); color: #d4a5ff; font-size: 11px; }
-.ir-ap-next { font-size: 12px; color: var(--ir-muted, #a1a7b5); padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.035); }
-.ir-ap-next b { color: var(--ir-text, #e2e4ea); font-weight: 600; margin-right: 4px; }
-.ir-ap-levels { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ir-ap-next { font-size: 12px; color: var(--ir-muted); padding: 8px 10px; border-radius: 10px; background: rgba(var(--ir-ink), 0.035); }
+.ir-ap-next b { color: var(--ir-text); font-weight: 600; margin-right: 4px; }
+.ir-ap-levels { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid rgba(var(--ir-ink), 0.06); }
 .ir-ap-level { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 4px; }
 .ir-ap-level:not(.done) .ir-ap-badge img { filter: grayscale(1); opacity: 0.4; }
-.ir-ap-level:not(.done) .ir-ap-levelname { color: var(--ir-muted, #a1a7b5); }
+.ir-ap-level:not(.done) .ir-ap-levelname { color: var(--ir-muted); }
 .ir-ap-levelname { font-size: 13px; }
-.ir-ap-leveldesc { font-size: 11.5px; color: var(--ir-muted, #a1a7b5); }
-.ir-ap-levelside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted, #a1a7b5); white-space: nowrap; }
+.ir-ap-leveldesc { font-size: 11.5px; color: var(--ir-muted); }
+.ir-ap-levelside { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 11px; color: var(--ir-muted); white-space: nowrap; }
 .ir-ap-level.done .ir-ap-levelside > :first-child { color: #3ddc84; }
-.ir-ap-empty { text-align: center; color: var(--ir-muted, #a1a7b5); padding: 40px 0; }
+.ir-ap-empty { text-align: center; color: var(--ir-muted); padding: 40px 0; }
 html.ir-embed .ir-ap { padding: 18px 20px 28px; }
 
 /* A short Achievements card (narrow layouts): pinned ones become one compact line each. */
@@ -1708,7 +1793,7 @@ html.ir-embed .ir-ap { padding: 18px 20px 28px; }
 }
 
 /* Behind the card grid the page stays the page color: the dark theme sometimes paints intra's
-   .page-content as a box (#14171d), and the see-through glass cards would turn grey over it. */
+   .page-content as a box (var(--ir-surface)), and the see-through glass cards would turn grey over it. */
 html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !important; }
 
 /* ---------- phones: the sidebar becomes a bottom tab bar (Instagram-like); no top bar ---------- */
@@ -1742,7 +1827,7 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
     padding: 4px 6px calc(4px + env(safe-area-inset-bottom)) !important;
     background: rgba(13, 15, 20, 0.88) !important;
     backdrop-filter: blur(14px) saturate(140%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+    box-shadow: inset 0 1px 0 rgba(var(--ir-ink), 0.07) !important;
     overflow: visible !important;
   }
   /* The page's links and our tools share one row; the rest is in the account menu or the web app. */
@@ -1808,11 +1893,11 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
   right: 8px;
   z-index: 2;
   padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ir-ink), 0.14);
   border-radius: 999px;
-  background: rgba(13, 15, 20, 0.85);
+  background: rgba(var(--ir-glass-rgb), 0.85);
   backdrop-filter: blur(8px);
-  color: #e2e4ea;
+  color: var(--ir-text);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -1831,7 +1916,7 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
   align-items: center;
   gap: 3px;
   margin-left: 6px;
-  color: var(--ir-faint, #737a8a);
+  color: var(--ir-faint);
   font-size: 12px;
   white-space: nowrap;
   vertical-align: -1px;
@@ -1849,10 +1934,10 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
   white-space: nowrap;
 }
 /* The seat our Clusters window was opened for (clusters-zoom.ts): a steady ring, and a pulse. */
-.ir-seat-mark { fill: rgba(0, 186, 188, 0.14); stroke: #00babc; stroke-width: 3; pointer-events: none; }
+.ir-seat-mark { fill: rgba(var(--ir-accent-rgb), 0.14); stroke: var(--ir-accent); stroke-width: 3; pointer-events: none; }
 .ir-seat-ring {
   fill: none;
-  stroke: #00babc;
+  stroke: var(--ir-accent);
   stroke-width: 2;
   pointer-events: none;
   transform-box: fill-box;
@@ -1893,3 +1978,20 @@ html.ir-embed .map-container > svg { display: block; max-height: calc(100vh - 11
   @keyframes ir-floor-name-plain { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 }
 .map-container.ir-dragging > svg, .map-container.ir-dragging > svg * { cursor: grabbing !important; }
+
+/* Light mode: the header fades into intra's light page, like it fades into the dark one
+   (dark.css), with the box around it see-through so the fade meets the page itself. */
+html[data-ir-mode='light'] #ir-hero {
+  --ir-fade: #fafafa; /* intra's body background */
+}
+html[data-ir-mode='light'].ir-hero-on .container-item.profile-item {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Light mode: event colors as text (month, category) get darker so yellow/green stay readable
+   on white; the stripes and fills keep the bright --accent. */
+html[data-ir-mode='light'] :is(.ir-agenda .event-item, #smartModal) {
+  --accent-ink: color-mix(in srgb, var(--accent) 62%, #000);
+}

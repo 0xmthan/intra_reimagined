@@ -13,7 +13,8 @@
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
 //   GET /v1/users/:login/banner, PUT|DELETE /v1/me/banner, GET /banners/<hash>.<ext>  →  custom banners (banners.ts)
 //   GET /v1/users/:login/pins, PUT /v1/me/pins  →  { pins: ["Bonus Hunter 4", …] }: up to 2 pinned achievements
-//   GET /v1/users/:login/ir, PUT /v1/me/ir  →  { user, hidden? }: are they an Intra Reimagined user (badge)
+//   GET /v1/users/:login/ir, PUT /v1/me/ir  →  { user, hidden?, theme? }: are they an Intra Reimagined user (badge),
+//     and their theme (yours always; someone else's only if they share it)
 //   GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login  →  { friends: [{ login, addedAt }] }: your private
 //                                     friends list (one-way: adding someone sends them nothing, and only you see it)
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
@@ -34,6 +35,10 @@ import { Auth } from './auth.ts';
 import { FamilyService } from './family.ts';
 import { OutstandingService } from './outstanding.ts';
 import { CampusMembers } from './campus.ts';
+
+// Theme choices the extension offers (src/theme.ts MODES / ACCENTS).
+const MODES = ['dark', 'light'];
+const ACCENTS = ['default', 'green'];
 import { BannerError, MAX_BYTES, MIME, bannerPath, processUpload, readBody, serveBanner, type ImageType } from './banners.ts';
 
 const envFile = new URL('.env', import.meta.url);
@@ -299,7 +304,11 @@ const server = createServer(async (req, res) => {
         const login = irOf[1].toLowerCase();
         const row = await db.getIrUser(login);
         // Someone who hid it still sees their own state (for the settings toggle).
-        const body = login === me ? { user: true, hidden: row?.hidden ?? false } : { user: !!row && !row.hidden };
+        const theme = row && { mode: row.mode ?? 'dark', accent: row.accent ?? 'default' };
+        const body =
+          login === me
+            ? { user: true, hidden: row?.hidden ?? false, theme: { ...(theme ?? { mode: 'dark', accent: 'default' }), share: row?.shareTheme ?? true, saved: !!row?.mode || !!row?.accent } }
+            : { user: !!row && !row.hidden, theme: row?.shareTheme && (row.mode || row.accent) ? theme : undefined };
         return send(res, 200, body, { 'Cache-Control': 'private, max-age=600' });
       }
       if (req.method !== 'PUT') {
@@ -312,10 +321,17 @@ const server = createServer(async (req, res) => {
       } catch {
         return send(res, 400, { error: 'expected JSON' });
       }
-      const hidden = (body as { hidden?: unknown })?.hidden;
-      if (typeof hidden !== 'boolean') return send(res, 400, { error: 'hidden: true or false' });
-      await db.setIrHidden(me, hidden);
-      return send(res, 200, { user: true, hidden });
+      const b = (body ?? {}) as { hidden?: unknown; mode?: unknown; accent?: unknown; shareTheme?: unknown };
+      if (b.hidden !== undefined && typeof b.hidden !== 'boolean') return send(res, 400, { error: 'hidden: true or false' });
+      if (b.mode !== undefined && !MODES.includes(b.mode as string)) return send(res, 400, { error: `mode: ${MODES.join(' or ')}` });
+      if (b.accent !== undefined && !ACCENTS.includes(b.accent as string)) return send(res, 400, { error: `accent: ${ACCENTS.join(' or ')}` });
+      if (b.shareTheme !== undefined && typeof b.shareTheme !== 'boolean') return send(res, 400, { error: 'shareTheme: true or false' });
+      if (b.hidden === undefined && b.mode === undefined && b.accent === undefined && b.shareTheme === undefined)
+        return send(res, 400, { error: 'nothing to save' });
+      if (typeof b.hidden === 'boolean') await db.setIrHidden(me, b.hidden);
+      if (b.mode !== undefined || b.accent !== undefined || b.shareTheme !== undefined)
+        await db.setIrTheme(me, { mode: b.mode as string | undefined, accent: b.accent as string | undefined, shareTheme: b.shareTheme as boolean | undefined });
+      return send(res, 200, { user: true });
     } catch (e) {
       if (e instanceof BannerError) {
         res.on('finish', () => req.socket.destroy());

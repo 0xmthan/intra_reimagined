@@ -85,7 +85,7 @@ const CSS = `
   position: fixed; right: 16px; bottom: 16px; z-index: 2147483646;
   display: flex; gap: 12px; width: min(340px, calc(100vw - 32px)); box-sizing: border-box;
   padding: 14px 16px; border-radius: 14px;
-  background: #14171d; color: #e2e4ea; border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--ir-surface); color: var(--ir-text); border: 1px solid rgba(var(--ir-ink), 0.09);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
   font: 14px/1.45 futura-pt, Helvetica, Arial, sans-serif;
   animation: rise 220ms cubic-bezier(.2, .8, .2, 1);
@@ -94,17 +94,17 @@ const CSS = `
 .logo svg { width: 36px; height: 36px; }
 .text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 b { font-size: 15px; font-weight: 600; }
-span { color: #a1a7b5; }
+span { color: var(--ir-muted); }
 .actions { display: flex; gap: 8px; margin-top: 10px; }
 .actions > * {
   font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
   padding: 7px 14px; border-radius: 8px; border: 0;
 }
-.primary { background: #00babc; color: #fff; }
+.primary { background: var(--ir-accent); color: #fff; }
 .primary:hover { filter: brightness(1.08); }
-.later { background: rgba(255, 255, 255, 0.07); color: #e2e4ea; }
-.later:hover { background: rgba(255, 255, 255, 0.12); }
-:focus-visible { outline: 2px solid #00babc; outline-offset: 2px; }
+.later { background: rgba(var(--ir-ink), 0.07); color: var(--ir-text); }
+.later:hover { background: rgba(var(--ir-ink), 0.12); }
+:focus-visible { outline: 2px solid var(--ir-accent); outline-offset: 2px; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
 @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
 `;

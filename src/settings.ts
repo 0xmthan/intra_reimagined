@@ -3,7 +3,8 @@
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
-import { fetchIrUser, saveIrHidden } from './profile/data';
+import { fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
+import { ACCENTS, MODES, currentAccent, currentMode, setPref } from './theme';
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -59,19 +60,51 @@ export function addSettingsButton() {
   if (onEditPage()) addSettingsSection();
 }
 
-/** "Show the Intra Reimagined badge on my profile": only once the server knows you (signed in). */
-async function addBadgeToggle(section: HTMLElement) {
-  const login = myLogin();
-  const ir = login ? await fetchIrUser(login) : undefined;
-  if (!ir) return;
+/** Theme pickers (mode, then accent): applied right away, in every open intra tab. */
+function addThemePicker(section: HTMLElement) {
+  const group = <T extends string>(
+    label: string,
+    options: readonly { id: T; name: string; color: string }[],
+    now: T,
+    pick: (id: T) => void,
+    extra = '',
+    swatch = '',
+  ) => {
+    const row = document.createElement('div');
+    row.className = 'col-sm-12 ir-setting-row';
+    setHTML(row, `
+      <p class="ir-setting-label">${label}</p>
+      <div class="ir-themes" role="radiogroup" aria-label="${label}">
+        ${options.map((o) => `
+          <button type="button" class="ir-theme" role="radio" data-id="${o.id}" aria-checked="${o.id === now}">
+            <span class="ir-theme-swatch ${swatch}" style="--sw: ${o.color}"></span>${o.name}
+          </button>`).join('')}
+        ${extra}
+      </div>`);
+    section.append(row);
+    const cards = [...row.querySelectorAll<HTMLButtonElement>('.ir-theme')];
+    for (const card of cards) {
+      card.addEventListener('click', () => {
+        for (const c of cards) c.setAttribute('aria-checked', String(c === card));
+        pick(options.find((o) => o.id === card.dataset.id)!.id);
+      });
+    }
+  };
+  // Saved on the server too, so it follows you to other devices (and visitors can see it).
+  group('Mode', MODES, currentMode(), (id) => { void setPref('mode', id); void saveIrTheme({ mode: id }); }, '', 'mode');
+  group('Accent', ACCENTS, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
+}
+
+/** A checkbox saved on the server; flips back with the error if saving fails. */
+function addServerCheck(section: HTMLElement, checked: boolean, label: string, help: string, save: (on: boolean) => Promise<{ error?: string }>) {
   const row = document.createElement('div');
   row.className = 'col-sm-12 ir-setting-row';
   setHTML(row, `
     <label class="ir-setting-check">
-      <input type="checkbox" ${ir.hidden ? '' : 'checked'}>
-      Show the Intra Reimagined badge on my profile
+      <input type="checkbox" ${checked ? 'checked' : ''}>
+      ${label}
     </label>
-    <p class="ir-setting-help">Other Intra Reimagined users see it next to your name.</p>
+    <p class="ir-setting-help">${help}</p>
     <p class="ir-setting-error" hidden></p>`);
   section.append(row);
   const box = row.querySelector('input')!;
@@ -79,7 +112,7 @@ async function addBadgeToggle(section: HTMLElement) {
   box.addEventListener('change', async () => {
     box.disabled = true;
     err.hidden = true;
-    const r = await saveIrHidden(!box.checked);
+    const r = await save(box.checked);
     box.disabled = false;
     if (r.error) {
       box.checked = !box.checked;
@@ -87,6 +120,27 @@ async function addBadgeToggle(section: HTMLElement) {
       err.hidden = false;
     }
   });
+}
+
+/** The settings that live on the server: only once it knows you (signed in). */
+async function addAccountToggles(section: HTMLElement) {
+  const login = myLogin();
+  const ir = login ? await fetchIrUser(login) : undefined;
+  if (!ir) return;
+  addServerCheck(
+    section,
+    ir.theme?.share ?? true,
+    'Show my theme to people who visit my profile',
+    'Intra Reimagined users see your mode and accent on your profile page.',
+    (on) => saveIrTheme({ shareTheme: on }),
+  );
+  addServerCheck(
+    section,
+    !ir.hidden,
+    'Show the Intra Reimagined badge on my profile',
+    'Other Intra Reimagined users see it next to your name.',
+    (on) => saveIrHidden(!on),
+  );
 }
 
 /** Adds our entry to the edit page's "SETTINGS" side menu and its content pane. */
@@ -110,7 +164,8 @@ function addSettingsSection() {
       <h4 class="font-weight-bold text-uppercase">Intra Reimagined${VERSION ? ` <span class="ir-setting-version">v${VERSION}</span>` : ''}</h4>
     </div>`);
   pane.appendChild(section);
-  addBadgeToggle(section);
+  addThemePicker(section);
+  addAccountToggles(section);
 
   // Chrome copies don't update themselves: point at the new version next to the current one.
   updateInfo().then((u) => {
