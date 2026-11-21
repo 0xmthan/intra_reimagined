@@ -3,6 +3,7 @@
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
+import { fetchIrUser, saveIrHidden } from './profile/data';
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -58,6 +59,36 @@ export function addSettingsButton() {
   if (onEditPage()) addSettingsSection();
 }
 
+/** "Show the Intra Reimagined badge on my profile": only once the server knows you (signed in). */
+async function addBadgeToggle(section: HTMLElement) {
+  const login = myLogin();
+  const ir = login ? await fetchIrUser(login) : undefined;
+  if (!ir) return;
+  const row = document.createElement('div');
+  row.className = 'col-sm-12 ir-setting-row';
+  setHTML(row, `
+    <label class="ir-setting-check">
+      <input type="checkbox" ${ir.hidden ? '' : 'checked'}>
+      Show the Intra Reimagined badge on my profile
+    </label>
+    <p class="ir-setting-help">Other Intra Reimagined users see it next to your name.</p>
+    <p class="ir-setting-error" hidden></p>`);
+  section.append(row);
+  const box = row.querySelector('input')!;
+  const err = row.querySelector<HTMLElement>('.ir-setting-error')!;
+  box.addEventListener('change', async () => {
+    box.disabled = true;
+    err.hidden = true;
+    const r = await saveIrHidden(!box.checked);
+    box.disabled = false;
+    if (r.error) {
+      box.checked = !box.checked;
+      err.textContent = r.error;
+      err.hidden = false;
+    }
+  });
+}
+
 /** Adds our entry to the edit page's "SETTINGS" side menu and its content pane. */
 function addSettingsSection() {
   const pills = document.querySelector('.page-content .nav-pills.nav-stacked');
@@ -79,6 +110,7 @@ function addSettingsSection() {
       <h4 class="font-weight-bold text-uppercase">Intra Reimagined${VERSION ? ` <span class="ir-setting-version">v${VERSION}</span>` : ''}</h4>
     </div>`);
   pane.appendChild(section);
+  addBadgeToggle(section);
 
   // Chrome copies don't update themselves: point at the new version next to the current one.
   updateInfo().then((u) => {

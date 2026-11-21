@@ -5,7 +5,7 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
+import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchIrUser, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
 import type { PaceProfile } from '../pace/types';
 import { addTooltip } from '../tooltip';
@@ -42,6 +42,8 @@ interface State {
   coal?: Awaited<ReturnType<typeof fetchCoalition>>;
   /** Custom banner from our server; null = none (coalition cover), undefined = not known yet. */
   banner?: string | null;
+  /** They use Intra Reimagined (and didn't hide it): shows the badge next to the name. */
+  irUser?: boolean;
 }
 
 // Last known custom banner per login, so it shows from the first paint instead of swapping in
@@ -117,6 +119,14 @@ export function mountHero() {
       paint();
     }
   });
+  fetchIrUser(data.login).then((ir) => {
+    // Your own badge shows unless you hid it in settings.
+    const on = !!ir?.user && !ir.hidden;
+    if (on !== !!state.irUser) {
+      state.irUser = on;
+      paint();
+    }
+  });
   fetchEvalStats(data.login, data.own ? undefined : myLogin()).then((evals) => {
     state.evals = evals ?? null;
     paint();
@@ -168,6 +178,9 @@ export function mountHero() {
     state.data.cursus.el.dispatchEvent(new Event('change', { bubbles: true })); // followSelect picks it up
   });
 }
+
+/** The extension's logo (public/icon.svg), for the "uses Intra Reimagined" badge. */
+const IR_MARK = `<svg viewBox="0 0 128 128" aria-label="Intra Reimagined user"><rect width="128" height="128" rx="30" fill="#00babc"/><g transform="translate(64 64) scale(.88) rotate(-22) translate(-64 -64)" fill="none" stroke-linecap="round"><path d="M12 64A52 14 0 0 1 116 64" stroke="#fff" stroke-width="7"/><circle cx="64" cy="64" r="27" fill="#fff" stroke="none"/><path d="M116 64A52 14 0 0 1 12 64" stroke="#00babc" stroke-width="15"/><path d="M116 64A52 14 0 0 1 12 64" stroke="#fff" stroke-width="7"/></g></svg>`;
 
 function badgeHtml(b: Badge) {
   const vars = [
@@ -323,7 +336,7 @@ function togetherHtml(login: string, t?: EvalStats['together']) {
   return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
 }
 
-function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals, banner }: State) {
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals, banner, irUser }: State) {
   // Coalition look for the selected cursus. Until that cursus's data has loaded, keep showing the
   // previous one as a whole (intra's banner may be half-switched), never a mix of the two.
   const c = goalsLoaded
@@ -389,6 +402,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           <div class="name-row">
             <h1 class="name">${esc(d.name)}</h1>
             ${d.badges.map(badgeHtml).join('')}
+            ${irUser ? `<span class="ir-user-badge" data-tip="Uses Intra Reimagined">${IR_MARK}</span>` : ''}
           </div>
           <div class="title-wrap">
             ${d.own && d.titles.length
@@ -407,7 +421,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
               : `<span class="chip" data-tip="Cursus and grade">${esc(d.cursus.value)}${grade}</span>`}
             ${d.location.available
               ? `<button class="chip btn" data-act="seat" data-tip="Show on the clusters map">${icon('seat')} ${esc(d.location.text)}</button>`
-              : `<span class="chip off">${icon('seat')} ${esc(d.location.text)}</span>`}
+              : ''}
             ${d.campus ? `<span class="chip">${icon('pin')} ${esc(d.campus)}</span>` : ''}
             ${d.email ? `<a class="chip btn" href="mailto:${esc(d.email)}">${icon('mail')} ${esc(d.email)}</a>` : ''}
           </div>

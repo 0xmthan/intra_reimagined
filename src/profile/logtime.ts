@@ -1,9 +1,12 @@
-// Home page Logtime card, reworked: intra draws a bare month calendar. This shows the same data
-// (intra's locations_stats: hours per day, about the last four months) as numbers that matter
-// (this week vs last, this month, daily average, current and longest streak, best day), a
-// calendar heatmap (one square per day, Monday to Sunday) and hours per week as bars.
-// Built with DOM APIs in a shadow root inside the card; intra's own calendar is hidden.
+// Home page Logtime card, reworked: intra draws a bare month calendar. This shows hours per day
+// as numbers that matter (this week vs last, this month, daily average, current and longest
+// streak, best day, this year, all time), a calendar heatmap (one square per day, Monday to
+// Sunday, scrolling back through the whole history) and hours per week as bars.
+// Data: every session from our server (all time, server/logtime.ts), split into local days; without
+// it, intra's locations_stats (only the last ~4 months). Built with DOM APIs in a shadow root
+// inside the card; intra's own calendar is hidden.
 import { myLogin } from '../me';
+import { fetchLogtimeSessions } from './data';
 
 const HOST = 'ir-logtime';
 const DAY = 86_400_000;
@@ -21,7 +24,43 @@ const mondayOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(
 const fmtH = (h: number) => (h >= 10 ? `${Math.round(h)}` : h >= 1 ? h.toFixed(1).replace(/\.0$/, '') : h > 0 ? `${Math.round(h * 60)}m` : '0');
 const hm = (h: number) => `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}m`;
 const short = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+/** Like short, plus the year when it isn't this one (all-time records can be from long ago). */
+const dated = (d: Date) =>
+  d.toLocaleDateString('en-GB', d.getFullYear() === new Date().getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
 
+/** Every day from `first` to today, zeros included. */
+function fillDays(first: Date, hoursOn: (isoDay: string) => number): Day[] {
+  const days: Day[] = [];
+  const today = midnight(new Date());
+  for (let t = midnight(first); t <= today; t = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) {
+    days.push({ date: t, hours: hoursOn(iso(t)) });
+  }
+  return days;
+}
+
+/** Sessions split at local midnights into hours per day (same numbers as intra's own stats). */
+function sessionsToDays(sessions: [number, number | null][]): Day[] {
+  const byDay = new Map<string, number>();
+  const now = Date.now();
+  for (const [start, stop] of sessions) {
+    const end = Math.min(stop ?? now, now);
+    for (let a = new Date(start); a.getTime() < end; ) {
+      const next = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 1);
+      const b = Math.min(next.getTime(), end);
+      byDay.set(iso(a), (byDay.get(iso(a)) ?? 0) + (b - a.getTime()) / 3_600_000);
+      a = new Date(b);
+    }
+  }
+  return fillDays(new Date(sessions[0][0]), (d) => byDay.get(d) ?? 0);
+}
+
+/** All-time days from our server, or undefined (no server, signed out, no sessions). */
+async function fetchAllDays(login: string): Promise<Day[] | undefined> {
+  const sessions = await fetchLogtimeSessions(login);
+  return sessions?.length ? sessionsToDays(sessions) : undefined;
+}
+
+/** Intra's own stats: only about the last four months. */
 async function fetchDays(login: string): Promise<Day[] | undefined> {
   try {
     const res = await fetch(`https://translate.intra.42.fr/users/${encodeURIComponent(login)}/locations_stats.json`, {
@@ -32,14 +71,8 @@ async function fetchDays(login: string): Promise<Day[] | undefined> {
     const stats = (await res.json()) as Record<string, string>;
     const keys = Object.keys(stats).filter((k) => /^\d{4}-\d\d-\d\d$/.test(k)).sort();
     if (!keys.length) return [];
-    // Every day from the first one intra has to today, zeros included.
     const [y, m, d] = keys[0].split('-').map(Number);
-    const days: Day[] = [];
-    const today = midnight(new Date());
-    for (let t = new Date(y, m - 1, d); t <= today; t = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) {
-      days.push({ date: t, hours: secs(stats[iso(t)] ?? '0:0:0') / 3600 });
-    }
-    return days;
+    return fillDays(new Date(y, m - 1, d), (day) => secs(stats[day] ?? '0:0:0') / 3600);
   } catch {
     return undefined;
   }
@@ -75,7 +108,10 @@ function summarize(days: Day[]) {
     longest = Math.max(longest, run);
   }
   const best = days.reduce<Day | undefined>((b, d) => (!b || d.hours > b.hours ? d : b), undefined);
-  return { week, lastSoFar, month, avg, activeDays: active30.length, streak, longest, best };
+  const year = sum(new Date(today.getFullYear(), 0, 1), new Date(today.getTime() + DAY));
+  const lastYear = sum(new Date(today.getFullYear() - 1, 0, 1), new Date(today.getFullYear(), 0, 1));
+  const total = days.reduce((s, d) => s + d.hours, 0);
+  return { week, lastSoFar, month, avg, activeDays: active30.length, streak, longest, best, year, lastYear, total };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string) {
@@ -104,6 +140,12 @@ function heatmap(days: Day[]) {
   const weeks = Math.round((mondayOf(today).getTime() - first.getTime()) / (7 * DAY)) + 1;
   const byIso = new Map(days.map((d) => [iso(d.date), d.hours]));
 
+  const monthHours = new Map<string, number>();
+  for (const d of days) {
+    const k = `${d.date.getFullYear()}-${d.date.getMonth()}`;
+    monthHours.set(k, (monthHours.get(k) ?? 0) + d.hours);
+  }
+
   const months = el('div', 'months');
   months.style.gridTemplateColumns = `repeat(${weeks}, var(--cell))`;
   const grid = el('div', 'grid');
@@ -115,7 +157,9 @@ function heatmap(days: Day[]) {
     // Label a column when a new month starts in it.
     const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
     if (sunday.getMonth() !== lastMonth) {
-      label.textContent = sunday.toLocaleDateString('en-GB', { month: 'short' });
+      // January carries its year, so scrolling back through the history stays readable.
+      label.textContent = sunday.toLocaleDateString('en-GB', sunday.getMonth() === 0 ? { month: 'short', year: '2-digit' } : { month: 'short' });
+      label.title = `${sunday.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })} · ${hm(monthHours.get(`${sunday.getFullYear()}-${sunday.getMonth()}`) ?? 0)}`;
       lastMonth = sunday.getMonth();
     }
     months.append(label);
@@ -136,9 +180,10 @@ function heatmap(days: Day[]) {
   }
   const days7 = el('div', 'weekdays');
   for (const d of ['Mon', '', 'Wed', '', 'Fri', '', 'Sun']) days7.append(el('span', '', d));
-  const body = el('div', 'heat-body');
-  body.append(days7, grid);
-  wrap.append(months, body); // hover a day for its hours
+  // Weekday names stay put; the weeks scroll, opened on the newest (see scrollToNow).
+  const scroll = el('div', 'heat-scroll');
+  scroll.append(months, grid);
+  wrap.append(days7, scroll); // hover a day for its hours, a month name for its total
   return wrap;
 }
 
@@ -179,34 +224,66 @@ export async function reworkLogtime(
     (b) => b.querySelector('h4.profile-title')?.firstChild?.textContent?.trim() === 'Logtime',
   ),
 ) {
-  const own = login === myLogin();
   if (!login || !card || card.querySelector(HOST)) return;
-  const days = await fetchDays(login);
-  if (!days?.length || card.querySelector(HOST)) return;
+  // All time from our server when it answers quickly; otherwise intra's last four months first,
+  // swapped for the whole history once it arrives (a first sync of a long history takes a while).
+  const all = fetchAllDays(login);
+  const quick = await Promise.race([all, new Promise<'slow'>((r) => setTimeout(r, 1200, 'slow'))]);
+  if (quick && quick !== 'slow') return render(card, login, quick, true);
+  const recent = await fetchDays(login);
+  if (recent?.length) render(card, login, recent, false);
+  if (quick === 'slow') {
+    const days = await all;
+    if (days) render(card, login, days, true);
+  }
+}
 
-  const s = summarize(days);
-  const host = document.createElement(HOST);
-  const root = host.attachShadow({ mode: 'open' });
+function render(card: HTMLElement, login: string, days: Day[], allTime: boolean) {
+  const own = login === myLogin();
+  let host = card.querySelector<HTMLElement>(HOST);
+  if (!host) {
+    host = document.createElement(HOST);
+    host.attachShadow({ mode: 'open' });
+  }
+  const root = host.shadowRoot!;
   const style = document.createElement('style');
   style.textContent = CSS;
 
+  const s = summarize(days);
   const diff = s.week - s.lastSoFar;
-  const tiles = el('div', 'tiles');
+  const tiles = el('div', `tiles${allTime ? ' all' : ''}`);
   tiles.append(
-    tile('This week', fmtH(s.week), 'h', s.lastSoFar || s.week ? `${diff >= 0 ? '+' : '−'}${fmtH(Math.abs(diff))}h vs last week` : undefined, diff >= 0 ? 'up' : 'down'),
+    tile('This week', fmtH(s.week), 'h', s.lastSoFar || s.week ? `${diff >= 0 ? '+' : '−'}${fmtH(Math.abs(diff))}h vs last wk` : undefined, diff >= 0 ? 'up' : 'down'),
     tile('This month', fmtH(s.month), 'h'),
-    tile('Daily average', fmtH(s.avg), 'h', `${s.activeDays} of the last 30 days`),
-    tile('Streak', String(s.streak), s.streak === 1 ? ' day' : ' days', s.streak ? 'in a row, still going' : own ? 'come in today to start one' : 'no streak right now'),
-    tile('Longest streak', String(s.longest), s.longest === 1 ? ' day' : ' days'),
-    tile('Best day', s.best && s.best.hours > 0 ? fmtH(s.best.hours) : '—', s.best && s.best.hours > 0 ? 'h' : '', s.best && s.best.hours > 0 ? short(s.best.date) : undefined),
+    tile('Daily average', fmtH(s.avg), 'h', `${s.activeDays} of last 30 days`),
+    tile('Streak', String(s.streak), s.streak === 1 ? ' day' : ' days', s.streak ? 'still going' : own ? 'come in today to start one' : 'no streak right now'),
+    tile('Longest streak', String(s.longest), s.longest === 1 ? ' day' : ' days', allTime ? 'ever' : undefined),
+    tile('Best day', s.best && s.best.hours > 0 ? fmtH(s.best.hours) : '—', s.best && s.best.hours > 0 ? 'h' : '', s.best && s.best.hours > 0 ? dated(s.best.date) : undefined),
   );
+  // Only the full history can say these (intra's four months would undercount them).
+  if (allTime) {
+    tiles.append(
+      tile(`This year`, fmtH(s.year), 'h', s.lastYear ? `${fmtH(s.lastYear)}h in ${new Date().getFullYear() - 1}` : undefined),
+      tile('All time', fmtH(s.total), 'h', `since ${days[0].date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`),
+    );
+  }
   const lower = el('div', 'lower');
-  lower.append(heatmap(days), weekBars(days));
-  root.append(style, tiles, lower);
+  const heat = heatmap(days);
+  lower.append(heat, weekBars(days));
+  root.replaceChildren(style, tiles, lower);
 
   // Intra's calendar stays in the page (its script owns it), just not shown.
-  for (const c of card.children) if (c.tagName !== 'H4') (c as HTMLElement).hidden = true;
-  card.append(host);
+  for (const c of card.children) if (c.tagName !== 'H4' && c !== host) (c as HTMLElement).hidden = true;
+  if (!host.isConnected) card.append(host);
+  scrollToNow(heat.querySelector<HTMLElement>('.heat-scroll')!);
+}
+
+/** Opens the heatmap on the newest weeks (it starts scrolled to the oldest). */
+function scrollToNow(scroll: HTMLElement) {
+  // Right away (the card is in the page, so it has a layout), and again on the next frame in case
+  // the card was still hidden; background tabs may not run frames until they're shown.
+  scroll.scrollLeft = scroll.scrollWidth;
+  requestAnimationFrame(() => (scroll.scrollLeft = scroll.scrollWidth));
 }
 
 const CSS = `
@@ -220,6 +297,7 @@ const CSS = `
 .tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; flex: none; }
 .tile { padding: 10px 14px; box-shadow: -1px 0 0 var(--line); min-width: 0; }
 .tile:first-child { box-shadow: none; }
+.tiles.all { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 .big { font-size: 24px; font-weight: 600; line-height: 1.1; white-space: nowrap; }
 .big small { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 1px; }
 .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -229,11 +307,16 @@ const CSS = `
 
 .lower { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; min-height: 0; flex: 1; }
 
-.heat { display: grid; gap: 4px; align-content: start; }
-.months { display: grid; gap: 3px; margin-left: 30px; font-size: 11px; color: var(--faint); height: 14px; }
+.heat { display: flex; gap: 6px; align-items: start; min-width: 0; }
+/* About four months wide; older weeks are a scroll away. */
+.heat-scroll {
+  display: grid; gap: 4px; align-content: start; overflow-x: auto; overflow-y: hidden;
+  max-width: calc(19 * (var(--cell) + 3px)); padding-bottom: 6px;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.months { display: grid; gap: 3px; font-size: 11px; color: var(--faint); height: 14px; }
 .months span { white-space: nowrap; overflow: visible; }
-.heat-body { display: flex; gap: 6px; }
-.weekdays { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 3px; width: 24px; font-size: 10.5px; color: var(--faint); }
+.weekdays { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 3px; width: 24px; font-size: 10.5px; color: var(--faint); padding-top: 18px; flex: none; }
 .weekdays span { line-height: var(--cell); }
 .grid { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 3px; }
 .cell { width: var(--cell); height: var(--cell); border-radius: 4px; background: rgba(255, 255, 255, 0.05); }
@@ -258,13 +341,17 @@ const CSS = `
 /* Phones: tiles in two rows of three; the heatmap above the weekly bars. */
 @media (max-width: 768px) {
   .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tiles.all { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .tile { box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
   .tile:nth-child(3n + 1) { box-shadow: 0 -1px 0 var(--line); }
   .tile:nth-child(-n + 3) { box-shadow: -1px 0 0 var(--line); }
-  .tile:first-child { box-shadow: none; }
+  .tiles.all .tile { box-shadow: -1px 0 0 var(--line), 0 -1px 0 var(--line); }
+  .tiles.all .tile:nth-child(4n + 1) { box-shadow: 0 -1px 0 var(--line); }
+  .tiles.all .tile:nth-child(-n + 4) { box-shadow: -1px 0 0 var(--line); }
+  .tile:first-child, .tiles.all .tile:first-child { box-shadow: none; }
   .big { font-size: 21px; }
   .lower { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .heat { overflow-x: auto; }
+  .heat-scroll { max-width: none; }
   .weeks { min-height: 150px; }
 }
 `;

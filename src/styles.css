@@ -75,6 +75,12 @@ html.ir-logo-pinned .main-navbar {
   text-transform: none;
 }
 
+.ir-setting-row { margin-top: 12px; }
+.ir-setting-check { display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer; }
+.ir-setting-check input { margin: 0; accent-color: #00babc; }
+.ir-setting-help { margin: 4px 0 0 24px; color: #999; font-size: 13px; }
+.ir-setting-error { margin: 4px 0 0 24px; color: #e5534b; font-size: 13px; }
+
 /* Dark mode lives in dark.css. */
 
 /* ---------- pace milestone timeline (v3 style) ---------- */
@@ -633,12 +639,13 @@ html.ir-embed .page-content .container-item {
 .ir-slot-error { color: #ff8a8a; font-size: 12px; }
 
 /* ---------- home page layout (profile/home-grid.ts): cards sized to what they hold, header look ---------- */
+/* The first row (Logtime) is 332px at every width: its tiles and the 7-day-tall heatmap need ~323px. */
 .row.ir-home-grid {
   --g-line: rgba(255, 255, 255, 0.09);
   --g-muted: rgba(242, 244, 247, 0.66);
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 320px 430px 430px 430px;
+  grid-template-rows: 332px 430px 430px 430px;
   grid-auto-rows: 430px;
   grid-template-areas:
     'projects logtime logtime'
@@ -770,7 +777,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 @media (max-width: 1199px) {
   .row.ir-home-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: 300px 400px 400px 400px 400px;
+    grid-template-rows: 332px 400px 400px 400px 400px;
     grid-auto-rows: 400px;
     grid-template-areas:
       'logtime logtime'
@@ -805,7 +812,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 /* Evaluations with nothing real coming up: a slim full-width strip, and Patronages gets wide. */
 .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
   /* Achievements reaches up into Projects' column (rows 4–5), so pinned ones and the list fit. */
-  grid-template-rows: 320px auto 280px 130px 430px;
+  grid-template-rows: 332px auto 280px 130px 430px;
   grid-template-areas:
     'projects logtime logtime'
     'projects evals evals'
@@ -858,7 +865,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 .ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] > summary { margin: 4px 0 6px; }
 @media (max-width: 1199px) {
   .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
-    grid-template-rows: 300px auto 400px 400px 400px 400px;
+    grid-template-rows: 332px auto 400px 400px 400px 400px;
     grid-template-areas:
       'logtime logtime'
       'evals evals'
@@ -891,7 +898,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 
 /* Others' profile pages (profile/user-page.ts): the same cards, their own arrangement. */
 .row.ir-home-grid.ir-user-grid {
-  grid-template-rows: 320px 430px 430px;
+  grid-template-rows: 332px 430px 430px;
   grid-template-areas:
     'projects logtime logtime'
     'projects patronages achievements'
@@ -899,7 +906,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 }
 @media (max-width: 1199px) {
   .row.ir-home-grid.ir-user-grid {
-    grid-template-rows: 300px 400px 400px 400px;
+    grid-template-rows: 332px 400px 400px 400px;
     grid-template-areas:
       'logtime logtime'
       'projects patronages'
@@ -1686,6 +1693,10 @@ html.ir-dark .page-content:has(.ir-home-grid) { background-color: transparent !i
 /* ---------- phones: the sidebar becomes a bottom tab bar (Instagram-like); no top bar ---------- */
 @media (max-width: 768px) {
   html.ir-no-topbar .main-navbar { display: none !important; }
+  /* intra pushes the page down 50px for its (hidden) mobile top bar */
+  html.ir-no-topbar .page { margin-top: 0 !important; }
+  /* intra's big mobile profile photo; the hero already shows the avatar */
+  html.ir-hero-on .profile-mobile-image { display: none !important; }
   html.ir-no-topbar .page-sidebar {
     position: fixed !important;
     top: auto !important;

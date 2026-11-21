@@ -328,6 +328,47 @@ export async function fetchOutstanding(login: string): Promise<Record<string, nu
   return out;
 }
 
+// ---------- all-time logtime (server: /v1/users/:login/logtime) ----------
+
+/** Every session `login` spent at a campus computer, [start ms, end ms | null = still on], oldest first;
+ * undefined = unknown (no server, signed out, or the server couldn't reach 42). */
+export async function fetchLogtimeSessions(login: string): Promise<[number, number | null][] | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ sessions: unknown }>(`/v1/users/${encodeURIComponent(login)}/logtime`);
+  if (!j || j === 'auth' || !Array.isArray(j.sessions)) return undefined;
+  const ok = (v: unknown): v is [number, number | null] =>
+    Array.isArray(v) && Number.isFinite(v[0]) && (v[1] === null || (Number.isFinite(v[1]) && v[1] >= v[0]));
+  return j.sessions.filter(ok);
+}
+
+// ---------- Intra Reimagined users (server: /v1/users/:login/ir, /v1/me/ir) ----------
+
+/** Whether `login` uses the extension (and, for yourself, whether you hid the badge); undefined = unknown. */
+export async function fetchIrUser(login: string): Promise<{ user: boolean; hidden?: boolean } | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ user: unknown; hidden?: unknown }>(`/v1/users/${encodeURIComponent(login)}/ir`, 'no-cache');
+  if (!j || j === 'auth') return undefined;
+  return { user: j.user === true, hidden: typeof j.hidden === 'boolean' ? j.hidden : undefined };
+}
+
+/** Hides (or shows again) your badge; returns an error message on failure. */
+export async function saveIrHidden(hidden: boolean): Promise<{ error?: string }> {
+  const token = await getToken();
+  if (!IR_API || !token) return { error: 'Log in with 42 first.' };
+  try {
+    const res = await fetch(`${IR_API}/v1/me/ir`, {
+      method: 'PUT',
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden }),
+    });
+    if (res.status === 401) dropToken();
+    return res.ok ? {} : { error: `Couldn't save (${res.status}).` };
+  } catch {
+    return { error: "Couldn't reach the server. Try again." };
+  }
+}
+
 // ---------- pinned achievements (server: /v1/users/:login/pins, /v1/me/pins) ----------
 
 const pinList = (v: unknown) => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string').slice(0, 2) : []);
