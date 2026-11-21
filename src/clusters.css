@@ -103,6 +103,30 @@ iframe {
     opacity: 0;
   }
 }
+/* Phones: like the friends panel, the whole screen above the bottom bar (still usable); solid. */
+@media (max-width: 767px) {
+  .bg {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .win {
+    width: 100%;
+    height: 100%;
+    padding-top: env(safe-area-inset-top);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation-name: up;
+  }
+}
+@keyframes up {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .bg,
   .win {

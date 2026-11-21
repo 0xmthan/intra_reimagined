@@ -212,7 +212,10 @@ async function show(link: Element, login: string) {
 
 export function initUserTooltips() {
   document.addEventListener('mouseover', (e) => {
-    const t = target(e.target as Element);
+    // Our own shadow-root UIs (friends panel) opt in by marking an element with data-tooltip-login:
+    // look for one along the composed path, since e.target here is just their host.
+    const marked = e.composedPath().find((n): n is Element => n instanceof Element && n.hasAttribute('data-tooltip-login'));
+    const t = marked ? target(marked) : target(e.target as Element);
     if (t?.el === current) return;
     hide();
     if (!t) return;

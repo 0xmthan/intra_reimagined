@@ -94,6 +94,22 @@ select {
   padding: 28px 32px 24px;
 }
 
+/* Custom banners (often GIFs) are cropped hard on a wide, short header: once it gets wider
+   than about 3:1, open up space at the top so more of the image shows and the content sits
+   lower. 440px is roughly the header's natural height. */
+.hero.custom-banner .inner {
+  padding-top: calc(28px + max(0px, 100cqw / 3 - 440px));
+}
+
+/* While that space is open (header wider than 1320px), the buttons stay in the top corner. */
+@container (min-width: 1321px) {
+  .hero.custom-banner .actions {
+    position: absolute;
+    top: 28px;
+    right: 32px;
+  }
+}
+
 .glass,
 .stats,
 .timeline {

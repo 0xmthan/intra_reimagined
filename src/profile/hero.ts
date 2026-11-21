@@ -359,6 +359,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
     : (coal ?? (d.coalition ? { name: d.coalition.name, color: d.coalition.color, score: d.coalition.score, rank: d.coalition.rank } : undefined));
   const cover = banner || (coal?.cover ?? (goalsLoaded || !coal ? d.cover : undefined));
   hero.style.setProperty('--coal', c?.color ?? '#00babc');
+  hero.classList.toggle('custom-banner', !!banner);
   if (cover || goalsLoaded) hero.style.setProperty('--cover', cover ? `url("${cover}")` : 'none');
 
   // ── deadline: next milestone (or blackhole while on probation) ──

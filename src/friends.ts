@@ -1,6 +1,6 @@
 // Friends: a private, one-way list of students you follow (adding someone sends them nothing; only
 // you see your list). Kept on our server (server: /v1/me/friends) so it follows you across devices.
-// A side panel (a sheet above the bottom bar on phones), opened from the sidebar tools (every page
+// A side panel next to the left sidebar (the whole screen above the bottom bar on phones), opened from the sidebar tools (every page
 // starts with it closed), shows
 // each friend's seat, level, wallet, eval points, days to their next deadline and logtime.
 //
@@ -270,6 +270,7 @@ function setOpen(on: boolean) {
     timer = setInterval(() => void tick(), TICK_MS);
   } else {
     host?.remove();
+    removeEventListener('resize', placePanel);
     host = undefined;
   }
 }
@@ -299,14 +300,16 @@ function mount() {
       <button class="icon" data-act="close" aria-label="Close" title="Close (Esc)">${svg('close')}</button>
     </header>
     <form class="add">
-      <input name="login" placeholder="Add a login…" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32">
+      <input name="login" placeholder="Add a login…" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ir-friend-suggest">
       <button type="submit">Add</button>
+      <ul class="suggest" id="ir-friend-suggest" role="listbox" hidden></ul>
     </form>
     <p class="error" hidden></p>
-    <div class="list"></div>
-    <p class="note">Only you see this list. Adding someone doesn’t notify them.</p>`);
+    <div class="list"></div>`);
   root.append(style, panel);
   document.body.append(host);
+  placePanel();
 
   panel.querySelector('[data-act="close"]')!.addEventListener('click', () => setOpen(false));
   const refreshBtn = panel.querySelector<HTMLButtonElement>('[data-act="refresh"]')!;
@@ -316,18 +319,23 @@ function mount() {
     refreshBtn.classList.remove('spin');
   });
   const form = panel.querySelector('form')!;
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = form.elements.namedItem('login') as HTMLInputElement;
-    const login = input.value.trim().toLowerCase();
+  const input = form.elements.namedItem('login') as HTMLInputElement;
+  const suggest = bindSuggestions(input, form.querySelector<HTMLUListElement>('.suggest')!, (login) => add(login));
+  const add = async (raw: string) => {
+    const login = raw.trim().toLowerCase();
     if (!login) return;
     if (login === myLogin()) return showError("That's you.");
+    suggest.close();
     input.disabled = true;
     const err = await setFriend(login, true);
     input.disabled = false;
     showError(err ?? '');
     if (!err) input.value = '';
     input.focus();
+  };
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    void add(suggest.picked() ?? input.value);
   });
   panel.querySelector('.list')!.addEventListener('click', async (e) => {
     const t = e.target as HTMLElement;
@@ -343,6 +351,115 @@ function mount() {
       showError((await setFriend(rm.dataset.remove!, false)) ?? '');
     }
   });
+}
+
+// ---------- suggestions while typing (intra's own search, as in the ⌘K palette) ----------
+
+interface Suggestion { login: string; img?: string }
+
+/** Logins matching what's typed, from intra's search (with your session); [] on any failure. */
+async function searchLogins(query: string, signal: AbortSignal): Promise<Suggestion[]> {
+  try {
+    const res = await fetch(`${PROFILE}/searches/search.json?query=${encodeURIComponent(query)}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal,
+    });
+    if (!res.ok) return [];
+    const users = (await res.json()) as { login?: unknown; cdn_uri?: unknown }[];
+    return users
+      .filter((u): u is { login: string; cdn_uri?: unknown } => typeof u?.login === 'string' && /^[a-z0-9-]{1,32}$/.test(u.login))
+      .map((u) => ({ login: u.login, img: typeof u.cdn_uri === 'string' && /^https:\/\//.test(u.cdn_uri) ? u.cdn_uri : undefined }));
+  } catch {
+    return [];
+  }
+}
+
+/** A dropdown under the add box: ↑/↓ to move, Enter or click to add, Esc to close it. */
+function bindSuggestions(input: HTMLInputElement, list: HTMLUListElement, pick: (login: string) => void) {
+  let items: Suggestion[] = [];
+  let active = -1;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let ctrl: AbortController | undefined;
+  const me = myLogin();
+
+  const close = () => {
+    ctrl?.abort();
+    clearTimeout(timer);
+    items = [];
+    active = -1;
+    list.hidden = true;
+    list.replaceChildren();
+    input.setAttribute('aria-expanded', 'false');
+  };
+  const paint = () => {
+    if (!items.length) return close();
+    setHTML(
+      list,
+      items
+        .map((u, i) => {
+          const have = !!friends?.includes(u.login);
+          return `<li role="option" id="ir-sg-${i}" class="${i === active ? 'on' : ''}${have ? ' have' : ''}" data-login="${esc(u.login)}" aria-selected="${i === active}">
+            <span class="sg-pic">${u.img ? `<img src="${esc(u.img)}" alt="" loading="lazy">` : esc(u.login[0].toUpperCase())}</span>
+            <span class="sg-login">${esc(u.login)}</span>
+            ${have ? '<span class="sg-tag">added</span>' : ''}
+          </li>`;
+        })
+        .join(''),
+    );
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    if (active >= 0) input.setAttribute('aria-activedescendant', `ir-sg-${active}`);
+    else input.removeAttribute('aria-activedescendant');
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    ctrl?.abort();
+    const q = input.value.trim().toLowerCase();
+    if (q.length < 2) return close();
+    timer = setTimeout(async () => {
+      ctrl = new AbortController();
+      const found = await searchLogins(q, ctrl.signal);
+      if (input.value.trim().toLowerCase() !== q) return; // typed on since
+      items = found.filter((u) => u.login !== me).slice(0, 6);
+      active = items.findIndex((u) => !friends?.includes(u.login)); // first one you can add
+      paint();
+    }, 180);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !list.hidden) {
+      e.stopPropagation(); // close the list, not the panel
+      close();
+      return;
+    }
+    if (list.hidden || !items.length || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+    e.preventDefault();
+    active = (active + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    paint();
+  });
+  input.addEventListener('blur', () => setTimeout(close, 150)); // after a click on an item
+  list.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the box
+  list.addEventListener('click', (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-login]');
+    if (li && !li.classList.contains('have')) pick(li.dataset.login!);
+  });
+
+  return {
+    close,
+    /** The highlighted suggestion (if you can still add it), for Enter. */
+    picked: () => (!list.hidden && active >= 0 && !friends?.includes(items[active]?.login) ? items[active].login : undefined),
+  };
+}
+
+/** Keeps the panel just right of the sidebar (its width differs between layouts). */
+function placePanel() {
+  if (!host) return;
+  const side = document.querySelector('.main-left-navbar')?.getBoundingClientRect();
+  // On phones the sidebar is the bottom bar: nothing to clear on the left.
+  const right = side && side.height > innerHeight / 2 ? Math.max(0, Math.round(side.right)) : 0;
+  host.style.setProperty('--side', `${right}px`);
+  addEventListener('resize', placePanel);
 }
 
 function showError(msg: string) {
@@ -378,7 +495,7 @@ function rowHtml(login: string) {
   const img = l?.image && /^https:\/\//.test(l.image) ? l.image : undefined;
   return `
     <a class="row" href="${PROFILE}/users/${esc(login)}">
-      <span class="pic ${seat ? 'on' : ''}">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : esc(login[0].toUpperCase())}</span>
+      <span class="pic ${seat ? 'on' : ''}" data-tooltip-login="${esc(login)}">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : esc(login[0].toUpperCase())}</span>
       <span class="who">
         <span class="top">
           <b>${esc(login)}</b>
@@ -397,13 +514,10 @@ function rowHtml(login: string) {
     </a>`;
 }
 
-/** On campus first, then the closest deadline first. */
+/** On campus first, then by level, highest first (not loaded yet: last). */
 function sorted(list: string[]) {
-  const days = (l: string) => {
-    const p = stats[l]?.pace;
-    return p?.kind === 'milestone' || p?.kind === 'blackhole' ? (p.days ?? 1e9) : 1e9;
-  };
-  return [...list].sort((a, b) => Number(!!stats[b]?.light?.seat) - Number(!!stats[a]?.light?.seat) || days(a) - days(b) || a.localeCompare(b));
+  const level = (l: string) => stats[l]?.light?.level ?? -1;
+  return [...list].sort((a, b) => Number(!!stats[b]?.light?.seat) - Number(!!stats[a]?.light?.seat) || level(b) - level(a) || a.localeCompare(b));
 }
 
 function render() {
@@ -463,16 +577,18 @@ export const svg = (name: keyof typeof PATHS) =>
 const CSS = `
 :host { all: initial; }
 .panel {
-  position: fixed; z-index: 2500; top: 12px; right: 12px; bottom: 12px; width: 340px;
+  /* Next to the left sidebar, where its button is (--side: where the sidebar ends, see placePanel). */
+  position: fixed; z-index: 2500; top: 12px; left: calc(var(--side, 0px) + 12px); bottom: 12px; width: 340px; max-width: calc(100vw - var(--side, 0px) - 24px);
   display: flex; flex-direction: column; overflow: hidden;
-  background: rgba(20, 22, 29, 0.96); backdrop-filter: blur(14px);
+  /* Glass: the page shows through, heavily blurred. */
+  background: rgba(16, 18, 24, 0.58); backdrop-filter: blur(28px) saturate(1.4); -webkit-backdrop-filter: blur(28px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 18px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   font: 14px/1.35 futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif; color: #f2f4f7;
   --muted: rgba(242, 244, 247, 0.62); --faint: rgba(242, 244, 247, 0.4); --line: rgba(255, 255, 255, 0.08); --accent: #00babc;
   animation: in 0.16s ease-out;
 }
-@keyframes in { from { opacity: 0; transform: translateX(12px); } }
+@keyframes in { from { opacity: 0; transform: translateX(-12px); } }
 header { display: flex; align-items: center; gap: 6px; padding: 14px 12px 10px 18px; }
 h2 { margin: 0; flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
 h2 svg { color: var(--accent); }
@@ -483,7 +599,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .icon:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
 .icon.spin svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.add { display: flex; gap: 6px; padding: 0 14px 10px; }
+.add { position: relative; display: flex; gap: 6px; padding: 0 14px 10px; }
+.suggest {
+  position: absolute; z-index: 3; top: 38px; left: 14px; right: 14px; margin: 0; padding: 4px; list-style: none;
+  background: rgba(22, 24, 31, 0.97); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.suggest li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 9px; cursor: pointer; }
+.suggest li.on, .suggest li:hover { background: rgba(0, 186, 188, 0.16); }
+.suggest li.have { cursor: default; opacity: 0.55; }
+.suggest li.have:hover { background: none; }
+.sg-pic { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #2a2d38; color: var(--muted); font-size: 12px; font-weight: 600; overflow: hidden; }
+.sg-pic img { width: 100%; height: 100%; object-fit: cover; }
+.sg-login { flex: 1; font-weight: 500; }
+.sg-tag { font-size: 11px; color: var(--faint); }
 .add input {
   flex: 1; min-width: 0; height: 34px; padding: 0 12px; border-radius: 10px; font: inherit; color: inherit;
   background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); outline: none;
@@ -503,7 +632,7 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
   background: #2a2d38; color: var(--muted); font-weight: 600;
 }
 .pic img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.pic.on::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 2.5px rgb(20, 22, 29); }
+.pic.on::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 2.5px rgba(16, 18, 24, 0.85); }
 .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .top { display: flex; align-items: center; gap: 8px; }
 .top b { font-weight: 600; font-size: 14.5px; }
@@ -523,17 +652,21 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
 .hours { display: flex; gap: 12px; margin-top: 4px; font-size: 11.5px; color: var(--faint); }
 .rm {
   position: absolute; top: 8px; right: 8px; display: none; place-items: center; width: 24px; height: 24px; padding: 0;
-  border: 0; border-radius: 7px; background: rgba(20, 22, 29, 0.9); color: var(--faint);
+  border: 0; border-radius: 7px; background: rgba(16, 18, 24, 0.7); color: var(--faint);
 }
 .row:hover .rm, .rm:focus-visible { display: grid; }
 .row:hover .seat, .row:hover .off { visibility: hidden; }
 .rm:hover { color: #ff8a8a; background: rgba(255, 122, 122, 0.12); }
 .rm svg { width: 14px; height: 14px; }
-.note { margin: 0; padding: 10px 18px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
 
-/* Phones: a sheet above the bottom bar. */
+/* Phones: the whole screen above the bottom bar (its Friends button still closes it), same glass. */
 @media (max-width: 767px) {
-  .panel { top: auto; left: 8px; right: 8px; width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-height: 72vh; }
+  .panel {
+    top: 0; left: 0; right: 0; width: auto; max-width: none; bottom: calc(56px + env(safe-area-inset-bottom));
+    padding-top: env(safe-area-inset-top); border: 0; border-radius: 0; box-shadow: none;
+    animation-name: in-up;
+  }
+  @keyframes in-up { from { opacity: 0; transform: translateY(12px); } }
   .rm { display: grid; }
   .row .seat, .row .off { visibility: visible !important; margin-right: 28px; }
 }
