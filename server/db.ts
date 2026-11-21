@@ -42,6 +42,13 @@ export interface EvalStats {
   refreshedAt: Date;
 }
 
+/** One logtime session at a campus computer (logtime.ts); endAt null = still logged in. */
+export interface Session {
+  id: number;
+  beginAt: Date;
+  endAt: Date | null;
+}
+
 /** One patronage (family.ts): `patron` patrons `child`. */
 export interface Patronage {
   id: number;
@@ -112,6 +119,14 @@ export class Db {
         names      jsonb not null,
         updated_at timestamptz not null default now()
       )`;
+    // Students who signed in to the extension (for the "Intra Reimagined" badge); hidden = opted out.
+    await this.#sql`
+      create table if not exists ir_users (
+        login      text primary key,
+        hidden     boolean not null default false,
+        first_seen timestamptz not null default now(),
+        last_seen  timestamptz not null default now()
+      )`;
     // Every patronage on 42 (family.ts keeps it in sync and in memory).
     await this.#sql`
       create table if not exists patronages (
@@ -124,6 +139,28 @@ export class Db {
         created_at   timestamptz not null,
         updated_at   timestamptz not null
       )`;
+    // Every logtime session (logtime.ts): fetched once per student, then only new ones are added.
+    await this.#sql`
+      create table if not exists locations (
+        id       bigint primary key,
+        login    text not null,
+        begin_at timestamptz not null,
+        end_at   timestamptz
+      )`;
+    await this.#sql`create index if not exists locations_login on locations (login, begin_at)`;
+    await this.#sql`
+      create table if not exists logtime_sync (
+        login     text primary key,
+        synced_at timestamptz not null default now()
+      )`;
+    // Friends lists: `owner` follows `friend`. One-way and private: nothing tells the friend.
+    await this.#sql`
+      create table if not exists friends (
+        owner    text not null,
+        friend   text not null,
+        added_at timestamptz not null default now(),
+        primary key (owner, friend)
+      )`;
     // Logins per primary campus (campus.ts), for a campus's patronage families.
     await this.#sql`
       create table if not exists campus_members (
@@ -131,6 +168,54 @@ export class Db {
         logins       jsonb not null,
         refreshed_at timestamptz not null default now()
       )`;
+  }
+
+  /** When `login`'s full history was last synced; undefined = never fetched. */
+  async getLogtimeSync(login: string): Promise<Date | undefined> {
+    const [row] = await this.#sql<{ syncedAt: Date }[]>`select synced_at as "syncedAt" from logtime_sync where login = ${login}`;
+    return row?.syncedAt;
+  }
+
+  async getLocations(login: string): Promise<Session[]> {
+    return this.#sql<Session[]>`
+      select id::float8 as id, begin_at as "beginAt", end_at as "endAt" from locations where login = ${login} order by begin_at`;
+  }
+
+  /** Adds new sessions and updates ones that closed since, then marks `login` synced. */
+  async saveLocations(login: string, rows: Session[]) {
+    await this.#sql.begin(async (tx) => {
+      for (let i = 0; i < rows.length; i += 1000) {
+        const chunk = rows.slice(i, i + 1000).map((r) => ({ id: r.id, login, begin_at: r.beginAt, end_at: r.endAt }));
+        await tx`
+          insert into locations ${tx(chunk)}
+          on conflict (id) do update set begin_at = excluded.begin_at, end_at = excluded.end_at`;
+      }
+      await tx`
+        insert into logtime_sync (login) values (${login})
+        on conflict (login) do update set synced_at = now()`;
+    });
+  }
+
+  /** `owner`'s friends, oldest first. */
+  async getFriends(owner: string): Promise<{ login: string; addedAt: Date }[]> {
+    return this.#sql<{ login: string; addedAt: Date }[]>`
+      select friend as login, added_at as "addedAt" from friends where owner = ${owner} order by added_at, friend`;
+  }
+
+  /** Adds `friend` unless `owner` already has `max` friends; false = the list is full. */
+  async addFriend(owner: string, friend: string, max: number): Promise<boolean> {
+    const rows = await this.#sql`
+      insert into friends (owner, friend)
+      select ${owner}::text, ${friend}::text where (select count(*) from friends where owner = ${owner}) < ${max}::int
+      on conflict (owner, friend) do nothing
+      returning 1`;
+    if (rows.length) return true;
+    const [had] = await this.#sql`select 1 from friends where owner = ${owner} and friend = ${friend}`;
+    return !!had; // already on the list counts as added
+  }
+
+  async removeFriend(owner: string, friend: string) {
+    await this.#sql`delete from friends where owner = ${owner} and friend = ${friend}`;
   }
 
   async getCampusMembers(campusId: number): Promise<{ logins: string[]; refreshedAt: Date } | undefined> {
@@ -224,6 +309,25 @@ export class Db {
     await this.#sql`
       insert into achievement_pins (login, names) values (${login}, ${this.#sql.json(names)})
       on conflict (login) do update set names = excluded.names, updated_at = now()`;
+  }
+
+  /** Records that `login` used the extension just now. */
+  async touchIrUser(login: string) {
+    await this.#sql`
+      insert into ir_users (login) values (${login})
+      on conflict (login) do update set last_seen = now()`;
+  }
+
+  /** undefined if they never signed in to the extension. */
+  async getIrUser(login: string): Promise<{ hidden: boolean } | undefined> {
+    const [row] = await this.#sql<{ hidden: boolean }[]>`select hidden from ir_users where login = ${login}`;
+    return row;
+  }
+
+  async setIrHidden(login: string, hidden: boolean) {
+    await this.#sql`
+      insert into ir_users (login, hidden) values (${login}, ${hidden})
+      on conflict (login) do update set hidden = excluded.hidden, last_seen = now()`;
   }
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {

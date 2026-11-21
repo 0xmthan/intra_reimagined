@@ -4,6 +4,7 @@
 //   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
 //   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
 //                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
+//   GET /v1/users/:login/logtime      →  { login, sessions: [[startMs, endMs|null], …], syncedAt }: all-time logtime (logtime.ts)
 //   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
@@ -12,6 +13,9 @@
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
 //   GET /v1/users/:login/banner, PUT|DELETE /v1/me/banner, GET /banners/<hash>.<ext>  →  custom banners (banners.ts)
 //   GET /v1/users/:login/pins, PUT /v1/me/pins  →  { pins: ["Bonus Hunter 4", …] }: up to 2 pinned achievements
+//   GET /v1/users/:login/ir, PUT /v1/me/ir  →  { user, hidden? }: are they an Intra Reimagined user (badge)
+//   GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login  →  { friends: [{ login, addedAt }] }: your private
+//                                     friends list (one-way: adding someone sends them nothing, and only you see it)
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
@@ -23,6 +27,7 @@ import { TtlCache } from './cache.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { Db, type Piscine } from './db.ts';
 import { EvalService } from './evals.ts';
+import { LogtimeService } from './logtime.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
 import { Auth } from './auth.ts';
@@ -53,6 +58,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://profile.intra.4
   .filter(Boolean);
 
 const DAY = 86_400_000;
+const MAX_FRIENDS = 100;
 const api = new FtApi(FT_UID, FT_SECRET);
 const piscineCache = new TtlCache<Piscine | null>(5000); // hot logins, in front of Postgres
 const limiter = new RateLimiter(60, 60_000); // per signed-in login: 60 requests / minute
@@ -65,6 +71,7 @@ const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefin
 if (db) await db.init();
 else console.warn('No DATABASE_URL: data is only cached in memory.');
 const evals = new EvalService(api, db);
+const logtime = new LogtimeService(api, db);
 const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
@@ -102,6 +109,17 @@ async function getPiscine(login: string): Promise<Piscine | null> {
   }
 }
 
+// Anyone with a valid token uses the extension: remember them for the badge (at most hourly per login).
+const seen = new TtlCache<true>(10_000);
+function signedIn(req: IncomingMessage): string | undefined {
+  const me = auth.verify(req);
+  if (me && db && !seen.get(me)) {
+    seen.set(me, true, DAY / 24);
+    db.touchIrUser(me).catch((e) => console.error(e));
+  }
+  return me;
+}
+
 function send(res: ServerResponse, status: number, body: unknown, extra: Record<string, string> = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...extra });
   res.end(JSON.stringify(body));
@@ -135,9 +153,9 @@ const server = createServer(async (req, res) => {
     });
     return res.end();
   }
-  // Only the banner and pins routes take writes; everything else is read-only.
+  // Only the banner, pins, badge and friends routes take writes; everything else is read-only.
   const write = req.method === 'PUT' || req.method === 'DELETE';
-  if (req.method !== 'GET' && !(write && (url.pathname === '/v1/me/banner' || url.pathname === '/v1/me/pins'))) {
+  if (req.method !== 'GET' && !(write && (url.pathname === '/v1/me/banner' || url.pathname === '/v1/me/pins' || url.pathname === '/v1/me/ir' || /^\/v1\/me\/friends\/[a-z0-9-]{1,32}$/i.test(url.pathname)))) {
     req.resume();
     return send(res, 405, { error: 'method not allowed' });
   }
@@ -173,7 +191,7 @@ const server = createServer(async (req, res) => {
 
   const bm = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/banner$/i);
   if (bm || url.pathname === '/v1/me/banner') {
-    const me = auth.verify(req);
+    const me = signedIn(req);
     if (!me) {
       req.resume();
       return send(res, 401, { error: 'login with 42 required' });
@@ -218,7 +236,7 @@ const server = createServer(async (req, res) => {
 
   const pinsOf = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/pins$/i);
   if (pinsOf || url.pathname === '/v1/me/pins') {
-    const me = auth.verify(req);
+    const me = signedIn(req);
     if (!me) {
       req.resume();
       return send(res, 401, { error: 'login with 42 required' });
@@ -261,8 +279,82 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  const irOf = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/ir$/i);
+  if (irOf || url.pathname === '/v1/me/ir') {
+    const me = signedIn(req);
+    if (!me) {
+      req.resume();
+      return send(res, 401, { error: 'login with 42 required' });
+    }
+    if (!limiter.take(me)) {
+      req.resume();
+      return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    }
+    if (!db) {
+      req.resume();
+      return send(res, 503, { error: 'the badge needs the database' });
+    }
+    try {
+      if (irOf) {
+        const login = irOf[1].toLowerCase();
+        const row = await db.getIrUser(login);
+        // Someone who hid it still sees their own state (for the settings toggle).
+        const body = login === me ? { user: true, hidden: row?.hidden ?? false } : { user: !!row && !row.hidden };
+        return send(res, 200, body, { 'Cache-Control': 'private, max-age=600' });
+      }
+      if (req.method !== 'PUT') {
+        req.resume();
+        return send(res, 405, { error: 'method not allowed' });
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse((await readBody(req, 256)).toString('utf8'));
+      } catch {
+        return send(res, 400, { error: 'expected JSON' });
+      }
+      const hidden = (body as { hidden?: unknown })?.hidden;
+      if (typeof hidden !== 'boolean') return send(res, 400, { error: 'hidden: true or false' });
+      await db.setIrHidden(me, hidden);
+      return send(res, 200, { user: true, hidden });
+    } catch (e) {
+      if (e instanceof BannerError) {
+        res.on('finish', () => req.socket.destroy());
+        return send(res, e.status, { error: e.message }, { Connection: 'close' });
+      }
+      console.error(e);
+      return send(res, 500, { error: 'could not save' });
+    }
+  }
+
+  const friendOf = url.pathname.match(/^\/v1\/me\/friends\/([a-z0-9-]{1,32})$/i);
+  if (friendOf || url.pathname === '/v1/me/friends') {
+    req.resume(); // no body on any of these
+    const me = signedIn(req);
+    if (!me) return send(res, 401, { error: 'login with 42 required' });
+    if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    if (!db) return send(res, 503, { error: 'friends need the database' });
+    const list = async () => ({ friends: await db.getFriends(me) });
+    try {
+      if (!friendOf) return send(res, 200, await list(), { 'Cache-Control': 'private, no-cache' });
+      if (req.method === 'GET') return send(res, 405, { error: 'method not allowed' });
+      const login = friendOf[1].toLowerCase();
+      if (req.method === 'DELETE') {
+        await db.removeFriend(me, login);
+        return send(res, 200, await list());
+      }
+      if (login === me) return send(res, 400, { error: "you can't add yourself" });
+      // Only real students (cached: 42 is asked once per login, ever).
+      if (!(await getPiscine(login))) return send(res, 404, { error: 'unknown login' });
+      if (!(await db.addFriend(me, login, MAX_FRIENDS))) return send(res, 409, { error: `at most ${MAX_FRIENDS} friends` });
+      return send(res, 200, await list());
+    } catch (e) {
+      console.error(e);
+      return send(res, 500, { error: 'could not update friends' });
+    }
+  }
+
   if (url.pathname === '/v1/patronages') {
-    const me = auth.verify(req);
+    const me = signedIn(req);
     if (!me) return send(res, 401, { error: 'login with 42 required' });
     if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
     try {
@@ -277,10 +369,10 @@ const server = createServer(async (req, res) => {
   }
 
   const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);
-  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family|outstanding)$/i);
+  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family|outstanding|logtime)$/i);
   if (!m && !(pm && MONTHS.includes(pm[3]))) return send(res, 404, { error: 'not found' });
 
-  const me = auth.verify(req);
+  const me = signedIn(req);
   if (!me) return send(res, 401, { error: 'login with 42 required' });
   if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
 
@@ -298,6 +390,7 @@ const server = createServer(async (req, res) => {
   const login = m[1].toLowerCase();
   try {
     if (m[2] === 'family') return send(res, 200, await family.get(login), { 'Cache-Control': 'private, max-age=600' });
+    if (m[2] === 'logtime') return send(res, 200, await logtime.get(login), { 'Cache-Control': 'private, max-age=300' });
     if (m[2] === 'outstanding') return send(res, 200, await outstanding.get(login), { 'Cache-Control': 'private, max-age=600' });
     if (m[2] === 'piscine') {
       const piscine = await getPiscine(login);
