@@ -5,6 +5,7 @@
 // teal box. Same data source as intra's: /users/<login>?ams=true, cached for the session.
 const HOST_ID = 'ir-user-tip';
 const DELAY = 350;
+const QUICK_DELAY = 120;
 const W = 230;
 const H = 270;
 
@@ -19,6 +20,11 @@ type Raw = {
 };
 
 const memo = new Map<string, Promise<Info | undefined>>();
+
+/** Hands over a student we already fetched elsewhere (friends panel), so their card shows at once. */
+export function primeUserTip(info: Info) {
+  if (!memo.has(info.login)) memo.set(info.login, Promise.resolve(info));
+}
 
 const plain = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
 
@@ -211,7 +217,7 @@ async function show(link: Element, login: string) {
 }
 
 export function initUserTooltips() {
-  document.addEventListener('mouseover', (e) => {
+  const onPointer = (e: MouseEvent) => {
     // Our own shadow-root UIs (friends panel) opt in by marking an element with data-tooltip-login:
     // look for one along the composed path, since e.target here is just their host.
     const marked = e.composedPath().find((n): n is Element => n instanceof Element && n.hasAttribute('data-tooltip-login'));
@@ -220,8 +226,13 @@ export function initUserTooltips() {
     hide();
     if (!t) return;
     current = t.el;
-    timer = window.setTimeout(() => void show(t.el, t.login), DELAY);
-  });
+    // Photos in our own panels are hovered on purpose: no need to wait as long as for page links.
+    timer = window.setTimeout(() => void show(t.el, t.login), marked && marked.getRootNode() !== document ? QUICK_DELAY : DELAY);
+  };
+  document.addEventListener('mouseover', onPointer);
+  // Firefox doesn't always send mouseover inside our shadow roots (moving from a row link onto the
+  // photo in it): mousemove still arrives, and does nothing while the target stays the same.
+  document.addEventListener('mousemove', onPointer, { passive: true });
   addEventListener('scroll', hide, { capture: true, passive: true });
   addEventListener('blur', hide);
 }

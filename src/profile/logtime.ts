@@ -1,7 +1,9 @@
 // Home page Logtime card, reworked: intra draws a bare month calendar. This shows hours per day
 // as numbers that matter (this week vs last, this month, daily average, current and longest
-// streak, best day, this year, all time), a calendar heatmap (one square per day, Monday to
-// Sunday, scrolling back through the whole history) and hours per week as bars.
+// streak, best day, this year, all time), then one of two views picked in the card's title:
+// Heatmap (one square per day, Monday to Sunday, each week's total under its column, scrolling
+// back through the whole history) or Calendar (every month as a calendar with its dates, side by side,
+// newest on the right, scrolling back the same way).
 // Data: every session from our server (all time, server/logtime.ts), split into local days; without
 // it, intra's locations_stats (only the last ~4 months). Built with DOM APIs in a shadow root
 // inside the card; intra's own calendar is hidden.
@@ -150,6 +152,10 @@ function heatmap(days: Day[]) {
   months.style.gridTemplateColumns = `repeat(${weeks}, var(--cell))`;
   const grid = el('div', 'grid');
   grid.style.gridTemplateColumns = `repeat(${weeks}, var(--cell))`;
+  // Each week's total under its column.
+  const totals = el('div', 'totals');
+  totals.style.gridTemplateColumns = `repeat(${weeks}, var(--cell))`;
+  const thisMonday = mondayOf(today).getTime();
   let lastMonth = -1;
   for (let w = 0; w < weeks; w++) {
     const monday = new Date(first.getFullYear(), first.getMonth(), first.getDate() + w * 7);
@@ -177,43 +183,18 @@ function heatmap(days: Day[]) {
       cell.style.gridRow = String(i + 1);
       grid.append(cell);
     }
+    let week = 0;
+    for (let i = 0; i < 7; i++) week += byIso.get(iso(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i))) ?? 0;
+    const t = el('span', monday.getTime() === thisMonday ? 'now' : '', week >= 0.5 ? String(Math.round(week)) : '');
+    t.title = `Week of ${short(monday)} · ${hm(week)}`;
+    totals.append(t);
   }
   const days7 = el('div', 'weekdays');
   for (const d of ['Mon', '', 'Wed', '', 'Fri', '', 'Sun']) days7.append(el('span', '', d));
   // Weekday names stay put; the weeks scroll, opened on the newest (see scrollToNow).
   const scroll = el('div', 'heat-scroll');
-  scroll.append(months, grid);
-  wrap.append(days7, scroll); // hover a day for its hours, a month name for its total
-  return wrap;
-}
-
-/** Hours per week, Monday to Sunday, the current week last (partial). */
-function weekBars(days: Day[]) {
-  const today = midnight(new Date());
-  const thisMonday = mondayOf(today);
-  const weeks: { monday: Date; hours: number }[] = [];
-  for (let w = 11; w >= 0; w--) {
-    const monday = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - w * 7);
-    if (monday < mondayOf(days[0].date)) continue;
-    const end = new Date(monday.getTime() + 7 * DAY);
-    weeks.push({ monday, hours: days.filter((d) => d.date >= monday && d.date < end).reduce((s, d) => s + d.hours, 0) });
-  }
-  const max = Math.max(1, ...weeks.map((w) => w.hours));
-  const wrap = el('div', 'weeks');
-  const bars = el('div', 'bars');
-  for (const w of weeks) {
-    const b = el('div', 'bar');
-    if (w.monday.getTime() === thisMonday.getTime()) b.classList.add('now');
-    b.title = `Week of ${short(w.monday)} · ${hm(w.hours)}`;
-    const fill = el('span', '');
-    fill.style.height = `${(w.hours / max) * 100}%`;
-    const v = el('em', '', w.hours >= 1 ? `${Math.round(w.hours)}` : '');
-    b.append(v, fill);
-    bars.append(b);
-  }
-  const axis = el('div', 'axis');
-  axis.append(el('span', '', short(weeks[0].monday)), el('span', '', 'this week'));
-  wrap.append(el('div', 'cap', 'Hours per week'), bars, axis);
+  scroll.append(months, grid, totals);
+  wrap.append(days7, scroll); // hover a day for its hours, a month name or a week's total for more
   return wrap;
 }
 
@@ -238,7 +219,68 @@ export async function reworkLogtime(
   }
 }
 
+// ---------- views: Heatmap (weeks) or Calendar (one month at a time) ----------
+
+type View = 'heatmap' | 'calendar';
+const VIEW_KEY = 'intra-reimagined:logtime-view';
+const readView = (): View => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'heatmap';
+  } catch {
+    return 'heatmap';
+  }
+};
+const saveView = (v: View) => {
+  try {
+    localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* storage blocked: just not remembered */
+  }
+};
+
+interface CardState {
+  login: string;
+  days: Day[];
+  allTime: boolean;
+}
+const cards = new WeakMap<HTMLElement, CardState>();
+const monthStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+
 function render(card: HTMLElement, login: string, days: Day[], allTime: boolean) {
+  cards.set(card, { login, days, allTime });
+  addViewPicker(card);
+  draw(card);
+}
+
+/** Heatmap | Calendar, in the card's title (like the Marks and Achievements sorters). */
+function addViewPicker(card: HTMLElement) {
+  const title = card.querySelector('h4.profile-title');
+  if (!title || title.querySelector('.ir-lt-view')) return;
+  const picker = el('div', 'ir-sort ir-lt-view');
+  picker.setAttribute('role', 'radiogroup');
+  picker.setAttribute('aria-label', 'Logtime view');
+  const buttons = (['heatmap', 'calendar'] as View[]).map((v) => {
+    const b = el('button', '', v === 'heatmap' ? 'Heatmap' : 'Calendar');
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.dataset.view = v;
+    b.addEventListener('click', () => {
+      saveView(v);
+      paint();
+      draw(card);
+    });
+    return b;
+  });
+  const paint = () => buttons.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.view === readView())));
+  paint();
+  picker.append(...buttons);
+  title.append(picker);
+}
+
+function draw(card: HTMLElement) {
+  const state = cards.get(card);
+  if (!state) return;
+  const { login, days, allTime } = state;
   const own = login === myLogin();
   let host = card.querySelector<HTMLElement>(HOST);
   if (!host) {
@@ -267,15 +309,82 @@ function render(card: HTMLElement, login: string, days: Day[], allTime: boolean)
       tile('All time', fmtH(s.total), 'h', `since ${days[0].date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`),
     );
   }
+  const calendar = readView() === 'calendar';
   const lower = el('div', 'lower');
-  const heat = heatmap(days);
-  lower.append(heat, weekBars(days));
+  let scroller: HTMLElement;
+  if (calendar) {
+    scroller = monthStrip(days);
+    lower.append(scroller);
+  } else {
+    const heat = heatmap(days);
+    scroller = heat.querySelector<HTMLElement>('.heat-scroll')!;
+    lower.append(heat);
+  }
   root.replaceChildren(style, tiles, lower);
 
   // Intra's calendar stays in the page (its script owns it), just not shown.
   for (const c of card.children) if (c.tagName !== 'H4' && c !== host) (c as HTMLElement).hidden = true;
   if (!host.isConnected) card.append(host);
-  scrollToNow(heat.querySelector<HTMLElement>('.heat-scroll')!);
+  scrollToNow(scroller);
+}
+
+/** Hours per month, keyed "year-month". */
+function monthTotals(days: Day[]) {
+  const m = new Map<string, { hours: number; active: number }>();
+  for (const d of days) {
+    const k = `${d.date.getFullYear()}-${d.date.getMonth()}`;
+    const t = m.get(k) ?? { hours: 0, active: 0 };
+    t.hours += d.hours;
+    if (d.hours > 0) t.active++;
+    m.set(k, t);
+  }
+  return m;
+}
+const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+
+/** Every month since the first logtime, side by side, newest on the right (scroll for older). */
+function monthStrip(days: Day[]) {
+  const strip = el('div', 'cal-strip');
+  const totals = monthTotals(days);
+  const now = monthStart(new Date());
+  for (let m = monthStart(days[0].date); m <= now; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+    strip.append(monthCalendar(days, m, totals.get(monthKey(m)) ?? { hours: 0, active: 0 }));
+  }
+  return strip;
+}
+
+/** One month, Monday to Sunday, a square per day with its date (hover for the hours). */
+function monthCalendar(days: Day[], month: Date, total: { hours: number; active: number }) {
+  const today = midnight(new Date());
+  const byIso = new Map(days.map((d) => [iso(d.date), d.hours]));
+  const wrap = el('div', 'cal');
+  const head = el('div', 'cal-head');
+  const name = month.getFullYear() === today.getFullYear()
+    ? month.toLocaleDateString('en-GB', { month: 'long' })
+    : month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const sum = el('span', 'cal-sum', `${fmtH(total.hours)}h`);
+  sum.title = `${hm(total.hours)} over ${total.active} ${total.active === 1 ? 'day' : 'days'}`;
+  head.append(el('b', '', name), sum);
+
+  const grid = el('div', 'cal-grid');
+  for (const d of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) grid.append(el('span', 'wd', d));
+  const lead = (month.getDay() + 6) % 7; // Monday first
+  for (let i = 0; i < lead; i++) grid.append(el('span', 'day blank'));
+  const n = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  for (let dd = 1; dd <= n; dd++) {
+    const date = new Date(month.getFullYear(), month.getMonth(), dd);
+    const cell = el('span', 'day', String(dd));
+    if (date > today || date < days[0].date) cell.classList.add('out');
+    else {
+      const h = byIso.get(iso(date)) ?? 0;
+      cell.dataset.l = String(level(h));
+      cell.title = `${date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · ${h > 0 ? hm(h) : 'no logtime'}`;
+      if (date.getTime() === today.getTime()) cell.classList.add('today');
+    }
+    grid.append(cell);
+  }
+  wrap.append(head, grid);
+  return wrap;
 }
 
 /** Opens the heatmap on the newest weeks (it starts scrolled to the oldest). */
@@ -291,7 +400,7 @@ const CSS = `
   display: flex; flex-direction: column; gap: 14px; min-height: 0;
   font: 14px/1.35 futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
   color: #f2f4f7; --muted: rgba(242, 244, 247, 0.66); --faint: rgba(242, 244, 247, 0.4);
-  --line: rgba(255, 255, 255, 0.09); --coal: #00babc; --cell: 15px;
+  --line: rgba(255, 255, 255, 0.09); --coal: #00babc; --cell: 17px;
   overflow: hidden;
 }
 .tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; flex: none; }
@@ -305,21 +414,26 @@ const CSS = `
 .sub.up { color: #3ddc84; }
 .sub.down { color: #ff7a7a; }
 
-.lower { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; min-height: 0; flex: 1; }
+/* Either view takes the whole width under the tiles. */
+.lower { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; flex: 1; }
 
 .heat { display: flex; gap: 6px; align-items: start; min-width: 0; }
-/* About four months wide; older weeks are a scroll away. */
+/* As many weeks as fit; older ones are a scroll away. */
 .heat-scroll {
-  display: grid; gap: 4px; align-content: start; overflow-x: auto; overflow-y: hidden;
-  max-width: calc(19 * (var(--cell) + 3px)); padding-bottom: 6px;
+  flex: 1; min-width: 0; display: grid; gap: 4px; align-content: start; justify-content: start; overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 6px;
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 .months { display: grid; gap: 3px; font-size: 11px; color: var(--faint); height: 14px; }
 .months span { white-space: nowrap; overflow: visible; }
-.weekdays { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 3px; width: 24px; font-size: 10.5px; color: var(--faint); padding-top: 18px; flex: none; }
+.weekdays { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 2px; width: 26px; font-size: 10.5px; color: var(--faint); padding-top: 18px; flex: none; }
 .weekdays span { line-height: var(--cell); }
-.grid { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 3px; }
-.cell { width: var(--cell); height: var(--cell); border-radius: 4px; background: rgba(255, 255, 255, 0.05); }
+.grid { display: grid; grid-template-rows: repeat(7, var(--cell)); gap: 2px 3px; }
+/* Week totals, one under each column. */
+.totals { display: grid; column-gap: 3px; height: 13px; font-size: 10px; line-height: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.totals span { text-align: center; white-space: nowrap; overflow: visible; }
+.totals span.now { color: #2ee6e8; font-weight: 600; }
+.cell { width: var(--cell); height: var(--cell); border-radius: 5px; background: rgba(255, 255, 255, 0.05); }
 .cell.out { background: transparent; }
 .cell.today { outline: 1.5px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
 .cell[data-l='1'] { background: rgba(0, 186, 188, 0.22); }
@@ -328,15 +442,31 @@ const CSS = `
 .cell[data-l='4'] { background: rgba(0, 186, 188, 0.8); }
 .cell[data-l='5'] { background: #2ee6e8; }
 
-.weeks { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.cap { font-size: 11px; color: var(--faint); height: 14px; margin-bottom: 4px; }
-.bars { flex: 1; display: flex; align-items: flex-end; gap: 6px; min-height: 60px; }
-.bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; min-width: 0; }
-.bar span { width: 100%; max-width: 34px; border-radius: 5px 5px 2px 2px; background: rgba(0, 186, 188, 0.45); min-height: 2px; }
-.bar.now span { background: var(--coal); }
-.bar:hover span { background: #2ee6e8; }
-.bar em { font-style: normal; font-size: 10.5px; color: var(--faint); }
-.axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 4px; }
+
+/* Calendar view: every month side by side, newest on the right (scrolls back like the heatmap). */
+.cal-strip {
+  display: flex; gap: 22px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; align-items: start;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.cal { flex: none; display: grid; gap: 4px; align-content: start; }
+.cal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; height: 18px; font-size: 13px; white-space: nowrap; }
+.cal-head b { font-weight: 600; }
+.cal-sum { color: var(--faint); font-size: 11.5px; white-space: nowrap; }
+/* Square days (1:1), sized to the card's height: weekday letters, then up to six weeks. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 20px); grid-template-rows: 13px; grid-auto-rows: 20px; gap: 2px; }
+.cal-grid .wd { font-size: 10px; line-height: 13px; text-align: center; color: var(--faint); }
+.day {
+  border-radius: 5px; font-size: 10px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums;
+  color: rgba(242, 244, 247, 0.72); background: rgba(255, 255, 255, 0.05);
+}
+.day.blank { background: transparent; }
+.day.out { background: transparent; color: rgba(242, 244, 247, 0.22); }
+.day.today { outline: 1.5px solid rgba(255, 255, 255, 0.55); outline-offset: 1px; }
+.day[data-l='1'] { background: rgba(0, 186, 188, 0.22); }
+.day[data-l='2'] { background: rgba(0, 186, 188, 0.4); }
+.day[data-l='3'] { background: rgba(0, 186, 188, 0.6); color: #fff; }
+.day[data-l='4'] { background: rgba(0, 186, 188, 0.8); color: #062326; font-weight: 600; }
+.day[data-l='5'] { background: #2ee6e8; color: #062326; font-weight: 600; }
 
 /* Phones: tiles in two rows of three; the heatmap above the weekly bars. */
 @media (max-width: 768px) {
@@ -352,6 +482,5 @@ const CSS = `
   .big { font-size: 21px; }
   .lower { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .heat-scroll { max-width: none; }
-  .weeks { min-height: 150px; }
 }
 `;

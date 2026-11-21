@@ -556,6 +556,12 @@ html.ir-embed .page-content .container-item {
   cursor: pointer;
 }
 .ir-sort button:hover { color: var(--ir-text, #e2e4ea); }
+/* Switches in card titles (Logtime's Heatmap | Calendar, Skills | Expertises): compact, so the
+   title keeps its height. */
+.ir-home-grid h4.profile-title > .ir-lt-view,
+.ir-home-grid h4.profile-title > .ir-skills-tabs { flex-wrap: nowrap; gap: 0; height: 28px; padding: 2px; }
+.ir-lt-view button,
+.ir-skills-tabs button { height: 22px; line-height: 22px !important; padding: 0 12px !important; font-size: 12px !important; letter-spacing: 0.02em !important; }
 .ir-sort button[aria-checked="true"], .ir-sort button[aria-selected="true"] { background: rgba(0, 186, 188, 0.18); color: #00babc; }
 
 /* ---------- home: Skills and Expertises in one card (profile/skills.ts) ---------- */
@@ -654,13 +660,13 @@ html.ir-embed .page-content .container-item {
 .ir-slot-error { color: #ff8a8a; font-size: 12px; }
 
 /* ---------- home page layout (profile/home-grid.ts): cards sized to what they hold, header look ---------- */
-/* The first row (Logtime) is 332px at every width: its tiles and the 7-day-tall heatmap need ~323px. */
+/* The first row (Logtime) is 356px at every width: room for its tiles and roomy heatmap / calendar squares. */
 .row.ir-home-grid {
   --g-line: rgba(255, 255, 255, 0.09);
   --g-muted: rgba(242, 244, 247, 0.66);
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 332px 430px 430px 430px;
+  grid-template-rows: 356px 430px 430px 430px;
   grid-auto-rows: 430px;
   grid-template-areas:
     'projects logtime logtime'
@@ -792,7 +798,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 @media (max-width: 1199px) {
   .row.ir-home-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: 332px 400px 400px 400px 400px;
+    grid-template-rows: 356px 400px 400px 400px 400px;
     grid-auto-rows: 400px;
     grid-template-areas:
       'logtime logtime'
@@ -827,7 +833,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 /* Evaluations with nothing real coming up: a slim full-width strip, and Patronages gets wide. */
 .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
   /* Achievements reaches up into Projects' column (rows 4–5), so pinned ones and the list fit. */
-  grid-template-rows: 332px auto 280px 130px 430px;
+  grid-template-rows: 356px auto 280px 130px 430px;
   grid-template-areas:
     'projects logtime logtime'
     'projects evals evals'
@@ -880,7 +886,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 .ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] > summary { margin: 4px 0 6px; }
 @media (max-width: 1199px) {
   .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
-    grid-template-rows: 332px auto 400px 400px 400px 400px;
+    grid-template-rows: 356px auto 400px 400px 400px 400px;
     grid-template-areas:
       'logtime logtime'
       'evals evals'
@@ -913,7 +919,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 
 /* Others' profile pages (profile/user-page.ts): the same cards, their own arrangement. */
 .row.ir-home-grid.ir-user-grid {
-  grid-template-rows: 332px 430px 430px;
+  grid-template-rows: 356px 430px 430px;
   grid-template-areas:
     'projects logtime logtime'
     'projects patronages achievements'
@@ -921,7 +927,7 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 }
 @media (max-width: 1199px) {
   .row.ir-home-grid.ir-user-grid {
-    grid-template-rows: 332px 400px 400px 400px;
+    grid-template-rows: 356px 400px 400px 400px;
     grid-template-areas:
       'logtime logtime'
       'projects patronages'

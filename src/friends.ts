@@ -2,7 +2,8 @@
 // you see your list). Kept on our server (server: /v1/me/friends) so it follows you across devices.
 // A side panel next to the left sidebar (the whole screen above the bottom bar on phones), opened from the sidebar tools (every page
 // starts with it closed), shows
-// each friend's seat, level, wallet, eval points, days to their next deadline and logtime.
+// each friend's seat, level, wallet, eval points, logtime and, for anyone on the blackhole system
+// (probation), the days to that deadline.
 //
 // Their stats come straight from intra with your own session (and logtime from our server), in
 // parts that change at different speeds, each refreshed on its own schedule while the panel is
@@ -11,6 +12,7 @@
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { openClusters } from './clusters';
+import { primeUserTip } from './user-tooltip';
 import { fetchFriends, fetchLogtimeSessions, saveFriend } from './profile/data';
 
 const HOST = 'ir-friends';
@@ -24,9 +26,11 @@ const MIN = 60_000;
 const STALE = { light: 3 * MIN, heavy: 30 * MIN, pace: 6 * 60 * MIN, hours: 10 * MIN } as const;
 type Part = keyof typeof STALE;
 
-interface Light { name: string; image?: string; seat?: string; level?: number; at: number }
+/** `photo`/`groups`: what the hover card shows (handed to it, see primeUserTip). */
+interface Light { name: string; image?: string; photo?: string; groups?: string[]; seat?: string; level?: number; at: number }
 interface Heavy { wallet?: string; evalPoints?: string; at: number }
-interface Pace { kind: 'milestone' | 'blackhole' | 'frozen' | 'done' | 'none'; days?: number; date?: string; at: number }
+/** `probation`: on the blackhole system, where missing the deadline blackholes you (only then is it shown). */
+interface Pace { kind: 'milestone' | 'blackhole' | 'frozen' | 'done' | 'none'; days?: number; date?: string; probation?: boolean; at: number }
 interface Hours { week: number; total: number; at: number }
 interface Stats { light?: Light; heavy?: Heavy; pace?: Pace; hours?: Hours }
 
@@ -124,8 +128,9 @@ async function getLight(login: string): Promise<Light | undefined> {
     usual_full_name?: string;
     full_name?: string;
     location?: string | null;
-    image?: { link?: string; versions?: { small?: string; medium?: string } };
+    image?: { link?: string; versions?: { small?: string; medium?: string; large?: string } };
     cursus?: Record<string, { level?: number }>[];
+    groups?: { name?: string }[];
   }>(`${PROFILE}/users/${encodeURIComponent(login)}?ams=true`);
   if (!r) return undefined;
   const levels = Object.fromEntries((r.cursus ?? []).flatMap((c) => Object.entries(c)).map(([k, v]) => [k, v?.level]));
@@ -133,6 +138,11 @@ async function getLight(login: string): Promise<Light | undefined> {
   return {
     name: r.usual_full_name || r.full_name || login,
     image: r.image?.versions?.small ?? r.image?.versions?.medium ?? r.image?.link ?? undefined,
+    photo: r.image?.versions?.large ?? r.image?.versions?.medium ?? r.image?.link ?? undefined,
+    // Group names come as HTML (as intra's own tooltip shows them): keep just their text.
+    groups: (r.groups ?? [])
+      .map((g) => (g.name ? new DOMParser().parseFromString(g.name, 'text/html').body.textContent?.trim() : '') ?? '')
+      .filter(Boolean),
     seat: r.location || undefined,
     level: typeof levels['42cursus'] === 'number' ? levels['42cursus'] : nums.length ? Math.max(...nums) : undefined,
     at: Date.now(),
@@ -166,14 +176,16 @@ async function getPace(login: string): Promise<Pace | undefined> {
     agu?: number;
     agu_date?: string;
     cc_validated?: boolean;
+    probationary_period?: boolean;
   }>(`${PROFILE}/users/${encodeURIComponent(login)}/goals?cursus=42cursus`);
   const at = Date.now();
-  if (!g) return { kind: 'none', at };
-  if (typeof g.agu === 'number' && g.agu > 0) return { kind: 'frozen', days: g.agu, date: g.agu_date, at };
-  if (typeof g.next_milestone_days === 'number') return { kind: 'milestone', days: g.next_milestone_days, date: g.next_milestone, at };
-  if (typeof g.singularity === 'number') return { kind: 'blackhole', days: g.singularity, date: g.bh_date, at };
-  if (g.cc_validated) return { kind: 'done', at };
-  return { kind: 'none', at };
+  if (!g) return { kind: 'none', probation: false, at };
+  if (typeof g.agu === 'number' && g.agu > 0) return { kind: 'frozen', days: g.agu, date: g.agu_date, probation: false, at };
+  if (typeof g.next_milestone_days === 'number')
+    return { kind: 'milestone', days: g.next_milestone_days, date: g.next_milestone, probation: !!g.probationary_period, at };
+  if (typeof g.singularity === 'number') return { kind: 'blackhole', days: g.singularity, date: g.bh_date, probation: true, at };
+  if (g.cc_validated) return { kind: 'done', probation: false, at };
+  return { kind: 'none', probation: false, at };
 }
 
 /** This week (since Monday, local time) and all time, from every session our server has. */
@@ -209,7 +221,11 @@ async function refresh(logins: string[], force = false) {
   const jobs: [string, Part][] = [];
   for (const login of logins) {
     for (const part of Object.keys(STALE) as Part[]) {
-      const at = stats[login]?.[part]?.at ?? 0;
+      // Saved before probation (pace) or the hover card's photo (light) were recorded: fetch again.
+      const old =
+        (part === 'pace' && stats[login]?.pace && stats[login]!.pace!.probation === undefined) ||
+        (part === 'light' && stats[login]?.light && stats[login]!.light!.photo === undefined);
+      const at = old ? 0 : (stats[login]?.[part]?.at ?? 0);
       if ((force || Date.now() - at > STALE[part]) && !inflight.has(`${login}:${part}`)) jobs.push([login, part]);
     }
   }
@@ -499,14 +515,14 @@ function rowHtml(login: string) {
       <span class="who">
         <span class="top">
           <b>${esc(login)}</b>
-          ${seat ? `<button class="seat" data-seat="${esc(seat)}" title="Show on the clusters map">${esc(seat)}</button>` : `<span class="off">${l ? 'offline' : ''}</span>`}
+          <span class="lvl" title="Level">Lvl <b>${l?.level !== undefined ? l.level.toFixed(2) : '…'}</b></span>
+          ${seat ? `<button class="seat" data-seat="${esc(seat)}" title="Show on the clusters map">${esc(seat)}</button>` : ''}
         </span>
         <span class="name">${esc(l?.name ?? '')}</span>
         <span class="stats">
-          <span title="Level"><i>Lvl</i><span class="v">${l?.level !== undefined ? l.level.toFixed(2) : '…'}</span></span>
-          <span title="Wallet"><i>₳</i><span class="v">${esc(s.heavy?.wallet ?? '…')}</span></span>
-          <span title="Evaluation points"><i>Ev</i><span class="v">${esc(s.heavy?.evalPoints ?? '…')}</span></span>
-          <span><i>Left</i>${paceHtml(s.pace)}</span>
+          <span title="Wallet"><span class="v">${esc(s.heavy?.wallet ?? '…')}</span><i>₳</i></span>
+          <span title="Evaluation points"><span class="v">${esc(s.heavy?.evalPoints ?? '…')}</span><i>Evp</i></span>
+          ${s.pace?.probation ? `<span><i>Blackhole</i>${paceHtml(s.pace)}</span>` : ''}
         </span>
         <span class="hours">${s.hours ? `<span title="Logtime since Monday">${fmtH(s.hours.week)}h this week</span><span title="All-time logtime">${fmtH(s.hours.total)}h all time</span>` : ''}</span>
       </span>
@@ -540,12 +556,34 @@ function render() {
   const order = sorted(friends);
   const here = order.filter((l) => stats[l]?.light?.seat);
   const away = order.filter((l) => !stats[l]?.light?.seat);
-  setHTML(
-    list,
-    (here.length ? `<h3>On campus · ${here.length}</h3>${here.map(rowHtml).join('')}` : '') +
-      (away.length ? `<h3>Away · ${away.length}</h3>${away.map(rowHtml).join('')}` : ''),
+  for (const l of order) {
+    const x = stats[l]?.light;
+    if (x) primeUserTip({ login: l, name: x.name, image: x.photo ?? x.image, location: x.seat, groups: x.groups ?? [] });
+  }
+  const heading = (text: string) => {
+    const h = document.createElement('h3');
+    h.textContent = text;
+    return h;
+  };
+  list.replaceChildren(
+    ...(here.length ? [heading(`On campus · ${here.length}`), ...here.map(row)] : []),
+    ...(away.length ? [heading(`Off campus · ${away.length}`), ...away.map(row)] : []),
   );
   showError(error);
+}
+
+/** Rows are reused while their content is the same, so a refresh doesn't swap out the one you're
+ * hovering (its hover card would lose its target). */
+const rows = new Map<string, { html: string; el: Element }>();
+function row(login: string) {
+  const html = rowHtml(login);
+  const kept = rows.get(login);
+  if (kept?.html === html) return kept.el;
+  const box = document.createElement('div');
+  setHTML(box, html);
+  const el = box.firstElementChild!;
+  rows.set(login, { html, el });
+  return el;
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -638,11 +676,12 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
 .top b { font-weight: 600; font-size: 14.5px; }
 .seat { margin-left: auto; padding: 1px 8px; border: 0; border-radius: 999px; font-size: 12px; background: rgba(61, 220, 132, 0.14); color: #6ee7a8; }
 .seat:hover { background: rgba(61, 220, 132, 0.26); }
-.off { margin-left: auto; font-size: 12px; color: var(--faint); }
 .name { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stats { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 2px 14px; margin-top: 6px; }
-.stats > span { display: flex; flex-direction: column; }
-.stats i { font-style: normal; font-size: 10.5px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; }
+.stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; margin-top: 5px; }
+.stats > span { display: flex; align-items: baseline; gap: 4px; }
+.stats i { font-style: normal; font-size: 11.5px; color: var(--faint); }
+.lvl { font-size: 12.5px; color: var(--faint); }
+.lvl b { font-weight: 600; color: var(--muted); }
 .v { font-size: 14px; font-weight: 600; }
 .v.muted { color: var(--faint); font-weight: 400; }
 .v.ok { color: #3ddc84; }
@@ -655,7 +694,7 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
   border: 0; border-radius: 7px; background: rgba(16, 18, 24, 0.7); color: var(--faint);
 }
 .row:hover .rm, .rm:focus-visible { display: grid; }
-.row:hover .seat, .row:hover .off { visibility: hidden; }
+.row:hover .seat { visibility: hidden; }
 .rm:hover { color: #ff8a8a; background: rgba(255, 122, 122, 0.12); }
 .rm svg { width: 14px; height: 14px; }
 
@@ -668,6 +707,6 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
   }
   @keyframes in-up { from { opacity: 0; transform: translateY(12px); } }
   .rm { display: grid; }
-  .row .seat, .row .off { visibility: visible !important; margin-right: 28px; }
+  .row .seat { visibility: visible !important; margin-right: 28px; }
 }
 `;

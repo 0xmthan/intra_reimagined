@@ -402,7 +402,8 @@ export const TREE_CSS = `
 `;
 
 const CSS = `
-:host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text, #e2e4ea); --tree-bg: var(--ir-surface-2, #1b1f27); }
+/* --tree-bg (avatar rings, edge fades): the glass card's own color, not the old blue-grey surface. */
+:host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text, #e2e4ea); --tree-bg: #14161a; }
 .viewport {
   overflow: auto; max-height: 330px; cursor: grab;
   scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent;

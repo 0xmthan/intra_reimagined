@@ -1,3 +1,4 @@
+/* Piscine list (piscine-list.ts): the page's neutral dark, like the Clusters and families windows. */
 :host {
   all: initial;
 }
@@ -8,22 +9,27 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 8vh 16px 16px;
+  padding: 6vh 16px 16px;
   background: rgba(5, 6, 9, 0.55);
   backdrop-filter: blur(4px);
-  font-family: futura-pt, Helvetica, sans-serif;
+  font-family: futura-pt, Futura, 'Trebuchet MS', system-ui, sans-serif;
   animation: fade 0.12s ease-out;
+  --text: #f2f4f7;
+  --muted: rgba(242, 244, 247, 0.62);
+  --faint: rgba(242, 244, 247, 0.4);
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #00babc;
 }
 .panel {
-  width: min(920px, 100%);
-  max-height: 84vh;
+  width: min(1000px, 100%);
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: rgba(22, 24, 30, 0.98);
+  background: #16171c;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
-  color: #e8eaf0;
+  color: var(--text);
   overflow: hidden;
   animation: pop 0.14s ease-out;
 }
@@ -42,172 +48,283 @@ h2 {
 .meta {
   margin: 4px 0 0;
   font-size: 14px;
-  color: #8b93a7;
+  color: var(--muted);
 }
 .x {
   border: 0;
-  background: none;
+  background: rgba(255, 255, 255, 0.06);
   color: #8b93a7;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
-  padding: 6px 8px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   cursor: pointer;
 }
 .x:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.11);
   color: #fff;
 }
+
+/* At a glance: joined 42cursus, average piscine level, frozen, blackholed, your rank. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 0 22px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+}
+/* Only the list scrolls: everything above it keeps its height. */
+header,
+.summary,
+.tools {
+  flex: none;
+}
+.summary[hidden] {
+  display: none;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 10px 14px;
+  box-shadow: -1px 0 0 var(--line);
+  min-width: 0;
+}
+.stat b {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.stat b small {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--faint);
+}
+.stat span {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat.frozen b {
+  color: #8fcaff;
+}
+.stat.bh b {
+  color: #ff8a8e;
+}
+.stat.me b {
+  color: #2ee6e8;
+}
+
 .tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 10px 14px;
   padding: 0 22px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--line);
 }
 input[type='search'] {
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
-  padding: 10px 12px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
   color: #fff;
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
   outline: none;
+}
+input[type='search']::placeholder {
+  color: var(--faint);
 }
 input[type='search']:focus {
   border-color: rgba(0, 186, 188, 0.6);
 }
-.sort {
+.sort-slot {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: #b9bfcc;
-  white-space: nowrap;
 }
-.sort select {
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+.cap {
+  font-size: 12px;
+  color: var(--faint);
+}
+/* One pill switch per group, like the cards' Newest | A–Z. */
+.pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+}
+.pills button {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
   font: inherit;
-  font-size: 14px;
-  color-scheme: dark;
+  font-size: 12.5px;
   cursor: pointer;
-}
-.sort select option {
-  background: #1d1f26;
-}
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: #b9bfcc;
   white-space: nowrap;
-  cursor: pointer;
 }
-.toggle input {
-  accent-color: #00babc;
+.pills button:hover {
+  color: var(--text);
 }
+.pills button[aria-checked='true'] {
+  background: rgba(0, 186, 188, 0.18);
+  color: #2ee6e8;
+}
+.pills .n {
+  margin-left: 3px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.pills button[aria-checked='true'] .n {
+  color: rgba(46, 230, 232, 0.7);
+}
+
 .grid {
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 16px 18px;
+  padding: 12px 14px 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 4px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 .student {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 8px 10px 8px 6px;
+  border-radius: 12px;
   color: inherit;
   text-decoration: none;
   min-width: 0;
 }
 .student:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.05);
 }
 .student.current {
-  background: rgba(0, 186, 188, 0.14);
+  background: rgba(0, 186, 188, 0.12);
   box-shadow: inset 0 0 0 1px rgba(0, 186, 188, 0.4);
 }
 .student.piscine,
 .student.blackholed {
-  opacity: 0.45;
+  opacity: 0.55;
 }
 .student.piscine:hover,
 .student.blackholed:hover {
-  opacity: 0.8;
+  opacity: 0.9;
 }
-.badge {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  vertical-align: 1px;
-}
-.student.frozen .badge {
-  background: rgba(120, 190, 255, 0.16);
-  color: #8fcaff;
-}
-.student.blackholed .badge {
-  background: rgba(255, 90, 95, 0.16);
-  color: #ff8a8e;
-}
-.pic {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: #2c303c center / cover no-repeat;
-}
-.lvl {
-  margin-left: auto;
-  flex-shrink: 0;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  color: #b9bfcc;
-  font-size: 13px;
+.rank {
+  flex: none;
+  width: 24px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
-.lvl.cc {
-  background: rgba(0, 186, 188, 0.16);
-  color: #4fd1d3;
+.pic {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #2a2d38 center / cover no-repeat;
 }
 .who {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 .who b {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
   font-weight: 600;
 }
 .who small {
-  font-size: 12.5px;
-  color: #8b93a7;
+  font-size: 12px;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.tag.frozen {
+  background: rgba(120, 190, 255, 0.16);
+  color: #8fcaff;
+}
+.tag.bh {
+  background: rgba(255, 90, 95, 0.16);
+  color: #ff8a8e;
+}
+/* Level against the best one in the piscine. */
+.bar {
+  height: 4px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.student.piscine .bar i {
+  background: rgba(255, 255, 255, 0.3);
+}
+.lv {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 54px;
+  font-variant-numeric: tabular-nums;
+}
+.lv b {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.lv b.cc {
+  color: #2ee6e8;
+}
+.lv b.none {
+  color: var(--faint);
+}
+.lv small {
+  font-size: 11px;
+  color: var(--faint);
   white-space: nowrap;
 }
 .state {
   grid-column: 1 / -1;
   padding: 24px 6px;
-  color: #8b93a7;
+  color: var(--muted);
   font-size: 15px;
 }
 @keyframes fade {
@@ -225,5 +342,22 @@ input[type='search']:focus {
   .bg,
   .panel {
     animation: none;
+  }
+}
+/* Phones: the window fills the screen above the bottom bar. */
+@media (max-width: 767px) {
+  .bg {
+    padding: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+  .panel {
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

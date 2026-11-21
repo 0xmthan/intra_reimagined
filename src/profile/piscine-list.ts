@@ -19,6 +19,61 @@ function close() {
   document.documentElement.classList.remove('ir-scroll-lock');
 }
 
+// 42's "active?" is false while an account is frozen (and for everyone who left), so combine it
+// with the 42cursus row: in 42cursus + blackhole ahead = cadet (frozen if inactive).
+type Status = 'cadet' | 'frozen' | 'blackholed' | 'piscine';
+const status = (s: PiscineStudent): Status =>
+  s.cursusLevel == null
+    ? 'piscine'
+    : s.blackholedAt && new Date(s.blackholedAt).getTime() < Date.now()
+      ? 'blackholed'
+      : s.active
+        ? 'cadet'
+        : 'frozen';
+
+type Filter = 'all' | 'cursus' | 'frozen' | 'blackholed' | 'piscine';
+const FILTERS: [Filter, string, (s: PiscineStudent) => boolean][] = [
+  ['all', 'All', () => true],
+  ['cursus', 'In 42cursus', (s) => s.cursusLevel != null],
+  ['frozen', 'Frozen', (s) => status(s) === 'frozen'],
+  ['blackholed', 'Blackholed', (s) => status(s) === 'blackholed'],
+  ['piscine', 'Didn’t join', (s) => status(s) === 'piscine'],
+];
+
+type Sort = 'level' | 'piscine' | 'login';
+const pisc = (s: PiscineStudent) => s.piscineLevel ?? -1;
+const SORTS: [Sort, string, (a: PiscineStudent, b: PiscineStudent) => number][] = [
+  // Got into 42cursus first (by that level), then the rest by piscine level.
+  ['level', '42cursus', (a, b) => Number(b.cursusLevel != null) - Number(a.cursusLevel != null) || (b.cursusLevel ?? 0) - (a.cursusLevel ?? 0) || pisc(b) - pisc(a)],
+  ['piscine', 'Piscine', (a, b) => pisc(b) - pisc(a)],
+  ['login', 'A–Z', () => 0],
+];
+
+const lvl = (n: number) => n.toFixed(2);
+
+/** A row of options as one pill switch (like the cards' Newest | A–Z). */
+function pills<T extends string>(label: string, options: [T, string][], value: T, onPick: (v: T) => void) {
+  const wrap = document.createElement('div');
+  wrap.className = 'pills';
+  wrap.setAttribute('role', 'radiogroup');
+  wrap.setAttribute('aria-label', label);
+  const paint = (v: T) => wrap.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === v)));
+  for (const [v, text] of options) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.v = v;
+    b.setAttribute('role', 'radio');
+    setHTML(b, text);
+    b.addEventListener('click', () => {
+      paint(v);
+      onPick(v);
+    });
+    wrap.append(b);
+  }
+  paint(value);
+  return wrap;
+}
+
 /** Opens the list. `current` is the profile it was opened from (highlighted in the list). */
 export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; current: string }) {
   close();
@@ -38,16 +93,11 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
            </div>
            <button class="x" aria-label="Close">✕</button>
          </header>
+         <div class="summary" hidden></div>
          <div class="tools">
            <input type="search" placeholder="Filter by login or name…" spellcheck="false" autocomplete="off">
-           <label class="sort">Sort
-             <select class="sort-by">
-               <option value="level">Level</option>
-               <option value="piscine">Piscine level</option>
-               <option value="login">Login</option>
-             </select>
-           </label>
-           <label class="toggle"><input type="checkbox" class="active-only"> Cadets only</label>
+           <div class="filter-slot"></div>
+           <div class="sort-slot"><span class="cap">Sort</span></div>
          </div>
          <div class="grid"><div class="state">Loading students…</div></div>
        </section>
@@ -59,9 +109,8 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   const bg = root.querySelector<HTMLElement>('.bg')!;
   const grid = root.querySelector<HTMLElement>('.grid')!;
   const count = root.querySelector<HTMLElement>('.count')!;
+  const summary = root.querySelector<HTMLElement>('.summary')!;
   const filter = root.querySelector<HTMLInputElement>('input[type="search"]')!;
-  const activeOnly = root.querySelector<HTMLInputElement>('.active-only')!;
-  const sortBy = root.querySelector<HTMLSelectElement>('.sort-by')!;
 
   root.querySelector('.x')!.addEventListener('click', close);
   bg.addEventListener('mousedown', (e) => e.target === bg && close());
@@ -75,62 +124,48 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
   filter.focus();
 
   let students: PiscineStudent[] = [];
-  // 42's "active?" is false while an account is frozen (and for everyone who left), so combine it
-  // with the 42cursus row: in 42cursus + blackhole ahead = cadet (frozen if inactive).
-  type Status = 'cadet' | 'frozen' | 'blackholed' | 'piscine';
-  const status = (s: PiscineStudent): Status =>
-    s.cursusLevel == null
-      ? 'piscine'
-      : s.blackholedAt && new Date(s.blackholedAt).getTime() < Date.now()
-        ? 'blackholed'
-        : s.active
-          ? 'cadet'
-          : 'frozen';
-  const BADGE: Record<Status, string> = { cadet: '', frozen: 'Frozen', blackholed: 'Blackholed', piscine: '' };
-  const TIP: Record<Status, string> = { cadet: '', frozen: 'Account frozen', blackholed: 'Blackholed', piscine: 'Did not join 42cursus' };
-  const pisc = (s: PiscineStudent) => s.piscineLevel ?? -1;
-  const SORTS: Record<string, (a: PiscineStudent, b: PiscineStudent) => number> = {
-    // Got into 42cursus first (by that level), then the rest by piscine level.
-    level: (a, b) =>
-      Number(b.cursusLevel != null) - Number(a.cursusLevel != null) ||
-      (b.cursusLevel ?? 0) - (a.cursusLevel ?? 0) ||
-      pisc(b) - pisc(a),
-    piscine: (a, b) => pisc(b) - pisc(a),
-    login: () => 0,
-  };
-  const lvl = (n: number) => n.toFixed(2);
-  const levelHtml = (s: PiscineStudent) => {
-    const main = sortBy.value === 'piscine' ? s.piscineLevel : (s.cursusLevel ?? s.piscineLevel);
-    if (main == null) return '';
-    const isCursus = sortBy.value !== 'piscine' && s.cursusLevel != null;
-    return `<span class="lvl${isCursus ? ' cc' : ''}" title="${isCursus ? `42cursus level${s.piscineLevel != null ? ` · piscine ${lvl(s.piscineLevel)}` : ''}` : 'Piscine level'}">${lvl(main)}</span>`;
-  };
+  let show: Filter = 'all';
+  let sort: Sort = 'level';
+
   const render = () => {
     const q = filter.value.trim().toLowerCase();
+    const test = FILTERS.find(([f]) => f === show)![2];
+    const by = SORTS.find(([k]) => k === sort)![2];
     const shown = students
-      .filter((s) => (!activeOnly.checked || ['cadet', 'frozen'].includes(status(s))) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)))
-      .sort((a, b) => SORTS[sortBy.value](a, b) || a.login.localeCompare(b.login));
+      .filter((s) => test(s) && (!q || s.login.includes(q) || s.name.toLowerCase().includes(q)))
+      .sort((a, b) => by(a, b) || a.login.localeCompare(b.login));
+    // The bar: each student's level against the best one in the whole piscine (same measure).
+    const value = (s: PiscineStudent) => (sort === 'piscine' ? s.piscineLevel : (s.cursusLevel ?? null));
+    const top = Math.max(1, ...students.map((s) => value(s) ?? 0));
     setHTML(
       grid,
       shown.length
         ? shown
-            .map(
-              (s) => {
-                const st = status(s);
-                return `<a class="student ${st}${s.login === opts.current ? ' current' : ''}" href="https://profile.intra.42.fr/users/${encodeURIComponent(s.login)}" target="_blank" rel="noopener" title="${TIP[st]}">
-                <span class="pic"${s.image ? ` style="background-image:url('${esc(s.image)}')"` : ''}></span>
-                <span class="who"><b>${esc(s.login)}</b><small>${BADGE[st] ? `<i class="badge">${BADGE[st]}</i>` : ''}${esc(s.name)}</small></span>
-                ${levelHtml(s)}
+            .map((s, i) => {
+              const st = status(s);
+              const main = sort === 'piscine' ? s.piscineLevel : s.cursusLevel;
+              const second = sort === 'piscine' ? s.cursusLevel : s.piscineLevel;
+              const v = value(s);
+              const tag = st === 'frozen' ? '<i class="tag frozen">Frozen</i>' : st === 'blackholed' ? '<i class="tag bh">Blackholed</i>' : '';
+              return `<a class="student ${st}${s.login === opts.current ? ' current' : ''}" href="https://profile.intra.42.fr/users/${encodeURIComponent(s.login)}" target="_blank" rel="noopener">
+                <span class="rank">${sort === 'login' ? '' : i + 1}</span>
+                <span class="pic" data-tooltip-login="${esc(s.login)}"${s.image ? ` style="background-image:url('${esc(s.image)}')"` : ''}></span>
+                <span class="who">
+                  <b>${esc(s.login)}${tag}</b>
+                  <small>${esc(s.name)}</small>
+                  <span class="bar"><i style="width:${v != null ? Math.max(2, (v / top) * 100) : 0}%"></i></span>
+                </span>
+                <span class="lv">
+                  <b class="${sort === 'piscine' ? 'p' : main != null ? 'cc' : 'none'}" title="${sort === 'piscine' ? 'Piscine level' : '42cursus level'}">${main != null ? lvl(main) : '—'}</b>
+                  <small title="${sort === 'piscine' ? '42cursus level' : 'Piscine level'}">${sort === 'piscine' ? 'cursus' : 'piscine'} ${second != null ? lvl(second) : '—'}</small>
+                </span>
               </a>`;
-              },
-            )
+            })
             .join('')
         : `<div class="state">No one matches.</div>`,
     );
   };
   filter.addEventListener('input', render);
-  activeOnly.addEventListener('change', render);
-  sortBy.addEventListener('change', render);
 
   fetchPiscineStudents(piscine).then((list) => {
     if (!host || !root.contains(grid)) return; // closed meanwhile
@@ -140,16 +175,32 @@ export function openPiscineList(piscine: ApiPiscine, opts: { campus?: string; cu
       return;
     }
     students = list;
-    const n = (st: Status) => list.filter((s) => status(s) === st).length;
-    const admitted = list.filter((s) => s.cursusLevel != null).length;
-    count.textContent = [
-      `${list.length} students`,
-      `${admitted} in 42cursus`,
-      n('frozen') && `${n('frozen')} frozen`,
-      n('blackholed') && `${n('blackholed')} blackholed`,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const n = (f: Filter) => list.filter(FILTERS.find(([k]) => k === f)![2]).length;
+    count.textContent = `${list.length} students`;
+
+    // Filters and sorts, with counts.
+    root.querySelector('.filter-slot')!.replaceWith(
+      pills('Show', FILTERS.map(([f, text]) => [f, `${text} <span class="n">${n(f)}</span>`]), show, (v) => ((show = v), render())),
+    );
+    root.querySelector('.sort-slot')!.append(pills('Sort by', SORTS.map(([k, text]) => [k, text]), sort, (v) => ((sort = v), render())));
+
+    // At a glance: how many got in, the average piscine level, and where this profile stands.
+    const admitted = n('cursus');
+    const piscLevels = list.map((s) => s.piscineLevel).filter((x): x is number => x != null);
+    const avg = piscLevels.length ? piscLevels.reduce((a, b) => a + b, 0) / piscLevels.length : undefined;
+    const me = list.find((s) => s.login === opts.current);
+    const cursusRank = me?.cursusLevel != null ? list.filter((s) => (s.cursusLevel ?? -1) > me.cursusLevel!).length + 1 : undefined;
+    const piscRank = me?.piscineLevel != null ? list.filter((s) => pisc(s) > me.piscineLevel!).length + 1 : undefined;
+    const stat = (big: string, label: string, tone = '') => `<div class="stat ${tone}"><b>${big}</b><span>${label}</span></div>`;
+    setHTML(
+      summary,
+      stat(`${admitted}<small> / ${list.length}</small>`, `joined 42cursus · ${Math.round((admitted / Math.max(1, list.length)) * 100)}%`) +
+        (avg !== undefined ? stat(lvl(avg), 'average piscine level') : '') +
+        stat(String(n('frozen')), 'frozen', 'frozen') +
+        stat(String(n('blackholed')), 'blackholed', 'bh') +
+        (me ? stat(`#${cursusRank ?? piscRank}`, cursusRank ? `in 42cursus · #${piscRank ?? '—'} in piscine` : 'in piscine level', 'me') : ''),
+    );
+    summary.hidden = false;
     render();
   });
 }
