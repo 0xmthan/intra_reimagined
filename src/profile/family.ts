@@ -18,6 +18,8 @@ const ROW = 76; // a person: avatar + name
 const CENTER_ROW = 96; // the person in the middle (bigger avatar)
 const DEPTH = 1; // generations shown above and below the profile's owner; further ones are a stub
 const STUB = 44; // vertical room for a "continues" stub: short branches and a +N
+const MIN_GAP = 18; // the tightest GAP when squeezing a tree to fit its card's height
+const MAX_HEIGHT = 330; // the tree's viewport outside the home card (see CSS)
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** A CSS url() for an https image URL; anything else gets no image. */
@@ -104,7 +106,13 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
   const show = (f: Family) => {
     f.people.forEach((img, l) => img && !avatars.has(l) && avatars.set(l, img));
     if (!f.links.length) return viewport.replaceChildren(emptyState(f.login, avatars.get(f.login)));
-    const tree = layout(f, { avatars, titles: page.titles, center: f.login, depth: DEPTH, siblings: true });
+    // Fit the card's height (only sideways scrolling): the home card's own height, else the
+    // viewport's cap; nothing to fit to while hidden (then the default spacing).
+    const fit = header ? viewport.clientHeight : MAX_HEIGHT;
+    // In a card, the tree runs under the card's (transparent) title: people start below it, and
+    // only an "+N above" stub reaches up into it (see the card CSS in styles.css).
+    const inset = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom - host.getBoundingClientRect().top)) : 0;
+    const tree = layout(f, { avatars, titles: page.titles, center: f.login, depth: DEPTH, siblings: true, fitHeight: fit || undefined, topInset: inset });
     viewport.replaceChildren(tree.canvas);
     focus(viewport, tree.nodes.get(f.login)!);
   };
@@ -205,13 +213,18 @@ function focus(viewport: HTMLElement, node: HTMLElement) {
     viewport.scrollLeft = node.offsetLeft + node.offsetWidth / 2 - viewport.clientWidth / 2;
     viewport.scrollTop = node.offsetTop + node.offsetHeight / 2 - viewport.clientHeight * 0.45;
   };
-  if (viewport.clientWidth) return apply();
-  // A hidden tab has no size yet: do it once it's shown.
+  if (viewport.clientWidth) apply();
+  // A hidden tab has no size yet, and a card can still change width as the page settles: keep
+  // centering on every resize until the person moves the tree themselves (or it's replaced).
   const ro = new ResizeObserver(() => {
-    if (!viewport.clientWidth || !node.isConnected) return;
-    ro.disconnect();
-    apply();
+    if (!node.isConnected) return stop();
+    if (viewport.clientWidth) apply();
   });
+  const stop = () => {
+    ro.disconnect();
+    for (const t of ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const) viewport.removeEventListener(t, stop);
+  };
+  for (const t of ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const) viewport.addEventListener(t, stop, { passive: true });
   ro.observe(viewport);
 }
 
@@ -237,6 +250,10 @@ export interface LayoutOptions {
    * patroned; their own patronees are a stub.
    */
   siblings?: boolean;
+  /** Shrink the room between generations (down to MIN_GAP) so the tree fits this height. */
+  fitHeight?: number;
+  /** Something drawn over the top this tall (a card's title): the first row starts below it. */
+  topInset?: number;
 }
 
 export function layout(f: Family, o: LayoutOptions) {
@@ -282,7 +299,8 @@ export function layout(f: Family, o: LayoutOptions) {
     level = next;
   }
 
-  // Siblings, oldest patronage first (undated ones last), `me` in their own place among them.
+  // Siblings, oldest patronage first (undated ones last), split evenly on both sides so `me` is
+  // in the middle of their row.
   const left: string[] = [];
   const right: string[] = [];
   const sibs = new Set<string>();
@@ -291,9 +309,9 @@ export function layout(f: Family, o: LayoutOptions) {
     for (const l of up[0].flatMap((p) => childrenOf.get(p) ?? []))
       if (l.child === me || !depthOf.has(l.child)) if (!row.some((r) => r.child === l.child)) row.push(l);
     row.sort((a, b) => (a.since || '9').localeCompare(b.since || '9'));
-    const at = row.findIndex((l) => l.child === me);
-    row.forEach((l, i) => {
-      if (l.child === me) return;
+    const others = row.filter((l) => l.child !== me);
+    const at = Math.floor(others.length / 2);
+    others.forEach((l, i) => {
       (i < at ? left : right).push(l.child);
       sibs.add(l.child);
       depthOf.set(l.child, 0);
@@ -321,48 +339,77 @@ export function layout(f: Family, o: LayoutOptions) {
     const n = beyond(s, childrenOf, 'child');
     if (n) moreDown.set(s, n);
   }
-  const width = new Map<string, number>();
-  const measure = (l: string): number => {
-    const w = Math.max(SLOT, (kids.get(l) ?? []).reduce((s, k) => s + measure(k), 0));
-    width.set(l, w);
-    return w;
-  };
-  const treeWidth = measure(me);
-  const x = new Map<string, number>(); // center x of each person
-  const place = (l: string, left: number) => {
+  // Each subtree packed as tightly as its shape allows: a subtree is drawn relative to its root,
+  // with its left and right edge per generation (its contour); each next child subtree goes as
+  // close to the ones before it as those edges allow (SLOT apart at every generation they share),
+  // so a small branch tucks in beside a big one instead of reserving its full width; the parent
+  // is centered over its first and last child.
+  type Shape = { rel: Map<string, number>; left: number[]; right: number[] };
+  const shape = (l: string): Shape => {
     const ks = kids.get(l) ?? [];
-    let cursor = left + (width.get(l)! - ks.reduce((s, k) => s + width.get(k)!, 0)) / 2;
-    for (const k of ks) {
-      place(k, cursor);
-      cursor += width.get(k)!;
-    }
-    x.set(l, ks.length ? (x.get(ks[0])! + x.get(ks[ks.length - 1])!) / 2 : left + width.get(l)! / 2);
+    if (!ks.length) return { rel: new Map([[l, 0]]), left: [0], right: [0] };
+    const rel = new Map<string, number>();
+    const left: number[] = [];
+    const right: number[] = [];
+    const offs: number[] = [];
+    ks.forEach((k, i) => {
+      const sub = shape(k);
+      let off = 0;
+      if (i) {
+        off = -Infinity;
+        for (let d = 0; d < Math.min(right.length, sub.left.length); d++) off = Math.max(off, right[d] - sub.left[d] + SLOT);
+      }
+      offs.push(off);
+      sub.rel.forEach((v, n) => rel.set(n, v + off));
+      sub.left.forEach((v, d) => (left[d] = Math.min(left[d] ?? Infinity, v + off)));
+      sub.right.forEach((v, d) => (right[d] = Math.max(right[d] ?? -Infinity, v + off)));
+    });
+    const mid = (offs[0] + offs[offs.length - 1]) / 2;
+    rel.forEach((v, n) => rel.set(n, v - mid));
+    rel.set(l, 0);
+    return { rel, left: [0, ...left.map((v) => v - mid)], right: [0, ...right.map((v) => v - mid)] };
   };
+  const x = new Map<string, number>(); // center x of each person
 
-  // Their row: siblings on each side, `me` over their own subtree in between.
-  const rowWidth = (left.length + right.length) * SLOT + treeWidth;
-  const canvasWidth = Math.max(rowWidth, ...up.map((r) => r.length * SLOT)) + 32;
-  const rowStart = (canvasWidth - rowWidth) / 2;
-  left.forEach((l, i) => x.set(l, rowStart + i * SLOT + SLOT / 2));
-  place(me, rowStart + left.length * SLOT);
-  right.forEach((l, i) => x.set(l, rowStart + left.length * SLOT + treeWidth + i * SLOT + SLOT / 2));
+  // Their row: siblings right beside `me` (their own patronees are only a stub, so `me`'s subtree
+  // can spread out under them), then everything shifted to start at the canvas's left padding.
+  shape(me).rel.forEach((v, n) => x.set(n, v));
+  const xm = x.get(me)!;
+  left.forEach((l, i) => x.set(l, xm - (left.length - i) * SLOT));
+  right.forEach((l, i) => x.set(l, xm + (i + 1) * SLOT));
+  const xs = [...x.values()];
+  const minX = Math.min(...xs) - SLOT / 2;
+  const rowWidth = Math.max(...xs) + SLOT / 2 - minX;
+  const baseWidth = Math.max(rowWidth, ...up.map((r) => r.length * SLOT)) + 32;
+  const shift = (baseWidth - rowWidth) / 2 - minX;
+  for (const [l, v] of x) x.set(l, v + shift);
   // Ancestors centered over that whole row.
   const first = left[0] ?? me;
   const last = right[right.length - 1] ?? me;
   const anchor = (x.get(first)! + x.get(last)!) / 2;
   up.forEach((row) => {
     const w = row.length * SLOT;
-    const start = Math.min(Math.max(16, anchor - w / 2), canvasWidth - 16 - w);
+    const start = Math.min(Math.max(16, anchor - w / 2), baseWidth - 16 - w);
     row.forEach((l, j) => x.set(l, start + j * SLOT + SLOT / 2));
   });
+  const canvasWidth = baseWidth;
 
   const depths = [...depthOf.values()];
   const top = Math.min(...depths);
   const bottom = Math.max(...depths);
   const centerRow = big(me) ? CENTER_ROW : ROW;
   const stubTop = moreUp.size ? STUB : 0;
-  const rowY = (d: number) => 8 + stubTop + (d - top) * (ROW + GAP) + (d > 0 ? centerRow - ROW : 0);
-  const height = rowY(bottom) + (bottom === 0 ? centerRow : ROW) + (moreDown.size ? STUB : 0);
+  const head = Math.max(8 + stubTop, o.topInset ?? 0); // where the first row starts
+  // Room under the last row only for stubs there (siblings' stubs sit between rows).
+  const stubBottom = [...moreDown.keys()].some((l) => depthOf.get(l) === bottom) ? STUB : 0;
+  const lastRow = bottom === 0 ? centerRow : ROW;
+  const fixed = head + (bottom - top) * ROW + (bottom > 0 ? centerRow - ROW : 0) + lastRow + stubBottom + 4;
+  // A sibling's stub hangs into the gap under their row: keep room for it.
+  const minGap = [...moreDown.keys()].some((l) => depthOf.get(l)! < bottom) ? 26 : MIN_GAP;
+  const gap =
+    o.fitHeight && bottom > top ? Math.max(minGap, Math.min(GAP, Math.floor((o.fitHeight - fixed) / (bottom - top)))) : GAP;
+  const rowY = (d: number) => head + (d - top) * (ROW + gap) + (d > 0 ? centerRow - ROW : 0);
+  const height = rowY(bottom) + lastRow + stubBottom;
 
   const canvas = el('div', 'canvas');
   canvas.style.width = `${canvasWidth}px`;
@@ -505,7 +552,7 @@ const CSS = `
 /* --tree-bg (avatar rings, edge fades): the glass card's own color, not the old blue-grey surface. */
 :host { display: block; font: 14px/1.35 futura-pt, Helvetica, Arial, sans-serif; color: var(--ir-text); --tree-bg: var(--ir-surface); }
 .viewport {
-  overflow: auto; max-height: 330px; cursor: grab;
+  overflow: auto; max-height: ${MAX_HEIGHT}px; cursor: grab;
   scrollbar-width: thin; scrollbar-color: rgba(var(--ir-ink), 0.15) transparent;
 }
 .viewport.dragging { cursor: grabbing; user-select: none; }

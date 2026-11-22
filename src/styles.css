@@ -659,6 +659,13 @@ html.ir-embed .page-content .container-item {
 .ir-skills-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; z-index: 2; }
 .ir-skills-tabs { font-weight: 400; }
 #skill-chart[hidden], .ir-expertises[hidden] { display: none !important; }
+/* Patronages (home card and profile pages): the family tree fills the whole card and the title
+   row floats over it, transparent, so the tree gets the title's height too (family.ts starts the
+   first row below the title). Only the title's buttons take clicks; the rest drags the tree. */
+.container-inner-item:has(> * > ir-family-tree[fill]) { position: relative; }
+.container-inner-item:has(> * > ir-family-tree[fill]) > h4.profile-title { position: relative; z-index: 3; pointer-events: none; }
+.container-inner-item:has(> * > ir-family-tree[fill]) > h4.profile-title :is(a, button) { pointer-events: auto; }
+.container-inner-item > *:has(> ir-family-tree[fill]) { position: absolute !important; inset: 0; margin: 0 !important; padding: 0 !important; border-radius: inherit; overflow: hidden; }
 /* Intra pulls the chart 40px up under the title (top: -40px), leaving a gap at the bottom: centre it
    in the space under the title instead. */
 #skill-chart { top: 0 !important; flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }

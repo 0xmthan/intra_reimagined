@@ -378,6 +378,9 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const missed = !frozen && daysLeft !== undefined && daysLeft < 0;
   const blackholed = absorbed || (missed && blackhole); // no common core ahead: no ETA/timeline
   const ccDone = !!goals?.cc_validated; // common core already validated: nothing left to time
+  // Once it is, 42 counts down to alumnization (alumni-management, via the pace bridge).
+  const alumniAt = ccDone && pace?.alumni?.deadline ? new Date(`${pace.alumni.deadline}T00:00:00`).getTime() : undefined;
+  const alumniDays = alumniAt !== undefined ? Math.ceil((alumniAt - Date.now()) / DAY_MS) : undefined;
   // Red only where a deadline can blackhole you (probation / old blackhole); a regular pace
   // milestone, even a close or missed one, isn't one.
   const danger = !frozen && blackhole;
@@ -498,7 +501,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}">
-          <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : ccDone && daysLeft === undefined ? 'Common core' : 'Next deadline'}</h3>
+          <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : ccDone && daysLeft === undefined ? (alumniAt !== undefined ? 'Alumnization' : 'Common core') : 'Next deadline'}</h3>
           ${missed ? `
             <div class="big" data-tip="${-daysLeft!} days">${spanHtml(Date.now() + daysLeft! * DAY_MS, Date.now())}<small> ago</small></div>
             <div class="sub">Missed ${pace ? `Milestone ${pace.milestone}` : 'deadline'} · ${esc(goals?.next_milestone ?? '')}</div>
@@ -514,6 +517,12 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
               ? `<div class="sub-row"><div class="sub" data-tip="Milestone ${pace.milestone} deadline">${esc(goals?.next_milestone ?? '')}</div>${pacesHtml(pace.pace)}</div>`
               : `<div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>`}
             ${used !== undefined ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
+          ` : ccDone && alumniDays !== undefined && alumniDays > 0 ? `
+            <div class="big" data-tip="${alumniDays} days">${spanHtml(Date.now(), alumniAt!)}<small> left</small></div>
+            <div class="sub" data-tip="Common core validated${pace?.alumni?.counter_begin_at ? ` on ${fmtIsoDate(pace.alumni.counter_begin_at)}` : ''}">Alumni on ${fmtIsoDate(pace!.alumni!.deadline)}</div>
+          ` : ccDone && alumniDays !== undefined ? `
+            <div class="big">Alumni</div>
+            <div class="sub">Since ${fmtIsoDate(pace!.alumni!.deadline)}</div>
           ` : ccDone ? `
             <div class="big">Done</div>
             <div class="sub">Common core validated</div>

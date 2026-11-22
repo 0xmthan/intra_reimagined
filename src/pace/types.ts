@@ -15,6 +15,15 @@ export interface PaceProfile {
   milestones: PaceMilestone[];
   /** Months the student chose to finish the common core in (one of PACES). */
   pace?: number | null;
+  /** From alumni-management.42.fr (fetched alongside, by the bridge): once the common core is done. */
+  alumni?: Alumni | null;
+}
+
+/** Shape of alumni-management.42.fr/api/v1/alumni_auto/:id (only the fields we use). */
+export interface Alumni {
+  counter_begin_at?: string | null; // YYYY-MM-DD: common core validated, the countdown's start
+  deadline?: string | null; // YYYY-MM-DD: alumnization date
+  status?: string | null;
 }
 
 /** The paces 42 offers, fastest first (months for the common core). */

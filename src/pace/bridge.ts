@@ -1,7 +1,8 @@
 // Runs inside the hidden profile-v3 iframe. Waits for v3 to finish its own login,
-// makes one read-only GET to the pace API with v3's token, and hands only the
-// resulting milestone data back to the v2 page. The token never leaves this frame.
-import { V2_ORIGIN, type PaceMessage, type PaceProfile } from './types';
+// makes read-only GETs to the pace API (and the alumni API, as v3's own profile does)
+// with v3's token, and hands only the resulting data back to the v2 page. The token
+// never leaves this frame.
+import { V2_ORIGIN, type Alumni, type PaceMessage, type PaceProfile } from './types';
 
 const TOKEN_TIMEOUT_MS = 25_000;
 
@@ -29,12 +30,19 @@ async function waitForToken(): Promise<string> {
 
 async function fetchPace(userId: string): Promise<PaceProfile> {
   const token = await waitForToken();
-  const res = await fetch(`https://pace-system.42.fr/api/v1/users/${encodeURIComponent(userId)}/profile`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
+  const get = (url: string) => fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+  const id = encodeURIComponent(userId);
+  // The alumni countdown is extra: if it fails, the pace data still goes back.
+  const [res, alumni] = await Promise.all([
+    get(`https://pace-system.42.fr/api/v1/users/${id}/profile`),
+    get(`https://alumni-management.42.fr/api/v1/alumni_auto/${id}`)
+      .then((r) => (r.ok ? (r.json() as Promise<Alumni>) : null))
+      .catch(() => null),
+  ]);
   if (!res.ok) throw new Error(`pace API ${res.status}`);
-  return res.json();
+  const pace = (await res.json()) as PaceProfile;
+  const keep = alumni && typeof alumni.deadline === 'string' ? { counter_begin_at: alumni.counter_begin_at ?? null, deadline: alumni.deadline, status: alumni.status ?? null } : null;
+  return { ...pace, alumni: keep };
 }
 
 export function runPaceBridge() {
