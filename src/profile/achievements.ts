@@ -273,7 +273,10 @@ function render(box: HTMLElement, data: { done: Ach[]; total: number }) {
     }
     list.append(...bySeries(data.done).map(stack));
   };
-  wrap.append(pinned, head, bar2, list);
+  // The progress and the list scroll together (only the pinned cards stay put).
+  const scroll = el('div', 'ir-ach-scroll');
+  scroll.append(head, bar2, list);
+  wrap.append(pinned, scroll);
   let view: View = 'rarity';
   try {
     if (localStorage.getItem(VIEW_KEY) === 'date') view = 'date';

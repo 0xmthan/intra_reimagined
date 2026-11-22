@@ -16,6 +16,8 @@ const SLOT = 92; // horizontal room per person
 const GAP = 44; // vertical room for branches between generations
 const ROW = 76; // a person: avatar + name
 const CENTER_ROW = 96; // the person in the middle (bigger avatar)
+const DEPTH = 1; // generations shown above and below the profile's owner; further ones are a stub
+const STUB = 44; // vertical room for a "continues" stub: short branches and a +N
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /** A CSS url() for an https image URL; anything else gets no image. */
@@ -102,7 +104,7 @@ export function renderFamilyTree(pane: Element, doc: Document = document, header
   const show = (f: Family) => {
     f.people.forEach((img, l) => img && !avatars.has(l) && avatars.set(l, img));
     if (!f.links.length) return viewport.replaceChildren(emptyState(f.login, avatars.get(f.login)));
-    const tree = layout(f, { avatars, titles: page.titles, center: f.login });
+    const tree = layout(f, { avatars, titles: page.titles, center: f.login, depth: DEPTH, siblings: true });
     viewport.replaceChildren(tree.canvas);
     focus(viewport, tree.nodes.get(f.login)!);
   };
@@ -225,6 +227,16 @@ export interface LayoutOptions {
   center?: string;
   /** Whose tree: ancestors above them, descendants below (default: f.login). */
   root?: string;
+  /**
+   * Generations shown each way (default: all). Someone at the edge with family beyond it gets a
+   * stub instead: a few short faded branches and how many more there are, linking to their profile.
+   */
+  depth?: number;
+  /**
+   * Also show siblings (the others the patrons patron) beside them, in the order they were
+   * patroned; their own patronees are a stub.
+   */
+  siblings?: boolean;
 }
 
 export function layout(f: Family, o: LayoutOptions) {
@@ -238,10 +250,29 @@ export function layout(f: Family, o: LayoutOptions) {
   const patronsOf = group('child');
   const childrenOf = group('patron');
 
+  // Everyone reachable from `l` through `next` (patrons or children) not already in view.
+  const beyond = (l: string, next: Map<string, Link[]>, key: 'patron' | 'child') => {
+    const seen = new Set<string>();
+    const stack = [l];
+    while (stack.length)
+      for (const x of next.get(stack.pop()!) ?? [])
+        if (!depthOf.has(x[key]) && !seen.has(x[key])) seen.add(x[key]), stack.push(x[key]);
+    return seen.size;
+  };
+  const moreUp = new Map<string, number>(); // edge person -> how many more above them
+  const moreDown = new Map<string, number>();
+
   // Ancestors by generation (up[0] = patrons, up[1] = their patrons, ...).
   const depthOf = new Map<string, number>([[me, 0]]);
   const up: string[][] = [];
   for (let level = [me]; ; ) {
+    if (o.depth !== undefined && up.length === o.depth) {
+      for (const l of level) {
+        const n = beyond(l, patronsOf, 'patron');
+        if (n) moreUp.set(l, n);
+      }
+      break;
+    }
     const next: string[] = [];
     for (const l of level)
       for (const p of patronsOf.get(l) ?? [])
@@ -251,17 +282,44 @@ export function layout(f: Family, o: LayoutOptions) {
     level = next;
   }
 
+  // Siblings, oldest patronage first (undated ones last), `me` in their own place among them.
+  const left: string[] = [];
+  const right: string[] = [];
+  const sibs = new Set<string>();
+  if (o.siblings && up[0]) {
+    const row: Link[] = [];
+    for (const l of up[0].flatMap((p) => childrenOf.get(p) ?? []))
+      if (l.child === me || !depthOf.has(l.child)) if (!row.some((r) => r.child === l.child)) row.push(l);
+    row.sort((a, b) => (a.since || '9').localeCompare(b.since || '9'));
+    const at = row.findIndex((l) => l.child === me);
+    row.forEach((l, i) => {
+      if (l.child === me) return;
+      (i < at ? left : right).push(l.child);
+      sibs.add(l.child);
+      depthOf.set(l.child, 0);
+    });
+  }
+
   // Descendants as a tree (someone with two patrons in view hangs under the first).
   const kids = new Map<string, string[]>();
   const queue = [me];
   for (let i = 0; i < queue.length; i++) {
     const p = queue[i];
+    if (o.depth !== undefined && depthOf.get(p) === o.depth) {
+      const n = beyond(p, childrenOf, 'child');
+      if (n) moreDown.set(p, n);
+      continue;
+    }
     for (const l of childrenOf.get(p) ?? []) {
       if (depthOf.has(l.child)) continue;
       depthOf.set(l.child, depthOf.get(p)! + 1);
       (kids.get(p) ?? kids.set(p, []).get(p)!).push(l.child);
       queue.push(l.child);
     }
+  }
+  for (const s of sibs) {
+    const n = beyond(s, childrenOf, 'child');
+    if (n) moreDown.set(s, n);
   }
   const width = new Map<string, number>();
   const measure = (l: string): number => {
@@ -281,11 +339,20 @@ export function layout(f: Family, o: LayoutOptions) {
     x.set(l, ks.length ? (x.get(ks[0])! + x.get(ks[ks.length - 1])!) / 2 : left + width.get(l)! / 2);
   };
 
-  const canvasWidth = Math.max(treeWidth, ...up.map((r) => r.length * SLOT)) + 32;
-  place(me, (canvasWidth - treeWidth) / 2);
+  // Their row: siblings on each side, `me` over their own subtree in between.
+  const rowWidth = (left.length + right.length) * SLOT + treeWidth;
+  const canvasWidth = Math.max(rowWidth, ...up.map((r) => r.length * SLOT)) + 32;
+  const rowStart = (canvasWidth - rowWidth) / 2;
+  left.forEach((l, i) => x.set(l, rowStart + i * SLOT + SLOT / 2));
+  place(me, rowStart + left.length * SLOT);
+  right.forEach((l, i) => x.set(l, rowStart + left.length * SLOT + treeWidth + i * SLOT + SLOT / 2));
+  // Ancestors centered over that whole row.
+  const first = left[0] ?? me;
+  const last = right[right.length - 1] ?? me;
+  const anchor = (x.get(first)! + x.get(last)!) / 2;
   up.forEach((row) => {
     const w = row.length * SLOT;
-    const start = Math.min(Math.max(16, x.get(me)! - w / 2), canvasWidth - 16 - w);
+    const start = Math.min(Math.max(16, anchor - w / 2), canvasWidth - 16 - w);
     row.forEach((l, j) => x.set(l, start + j * SLOT + SLOT / 2));
   });
 
@@ -293,8 +360,9 @@ export function layout(f: Family, o: LayoutOptions) {
   const top = Math.min(...depths);
   const bottom = Math.max(...depths);
   const centerRow = big(me) ? CENTER_ROW : ROW;
-  const rowY = (d: number) => 8 + (d - top) * (ROW + GAP) + (d > 0 ? centerRow - ROW : 0);
-  const height = rowY(bottom) + (bottom === 0 ? centerRow : ROW);
+  const stubTop = moreUp.size ? STUB : 0;
+  const rowY = (d: number) => 8 + stubTop + (d - top) * (ROW + GAP) + (d > 0 ? centerRow - ROW : 0);
+  const height = rowY(bottom) + (bottom === 0 ? centerRow : ROW) + (moreDown.size ? STUB : 0);
 
   const canvas = el('div', 'canvas');
   canvas.style.width = `${canvasWidth}px`;
@@ -311,8 +379,8 @@ export function layout(f: Family, o: LayoutOptions) {
     const dc = depthOf.get(l.child);
     const dp = depthOf.get(l.patron);
     if (dc === undefined || dp === undefined || dc !== dp + 1) continue;
-    if (dc > 0 && !linkTo.has(l.child)) linkTo.set(l.child, l);
-    if (dp < 0 && !linkTo.has(l.patron)) linkTo.set(l.patron, l);
+    if ((dc > 0 || sibs.has(l.child)) && !linkTo.has(l.child)) linkTo.set(l.child, l);
+    if (dp < 0 && !sibs.has(l.child) && !linkTo.has(l.patron)) linkTo.set(l.patron, l);
   }
 
   const nodes = new Map<string, HTMLElement>();
@@ -338,6 +406,31 @@ export function layout(f: Family, o: LayoutOptions) {
     if (!l.ongoing) p.classList.add('ended');
     svg.append(p);
   }
+
+  // Stubs where the family goes on past the edge: short dotted branches from the person (three
+  // fanning out below; one going up, as a line of patrons doesn't branch), and "+N" at their ends
+  // (a link to that person, whose own tree shows the rest).
+  const stub = (l: string, n: number, dir: 1 | -1) => {
+    const cx = x.get(l)!;
+    const y0 = dir > 0 ? nodeBottom(l) + 2 : rowY(depthOf.get(l)!) + 2;
+    const y1 = y0 + dir * (STUB - 18);
+    for (const dx of dir > 0 ? [-16, 0, 16] : [0]) {
+      const p = document.createElementNS(SVG_NS, 'path');
+      const m = (y1 - y0) / 2;
+      p.setAttribute('d', `M${cx},${y0} C${cx},${y0 + m} ${cx + dx},${y1 - m} ${cx + dx},${y1}`);
+      p.classList.add('more');
+      svg.append(p);
+    }
+    const tag = el('a', 'more-count');
+    tag.href = `https://profile.intra.42.fr/users/${encodeURIComponent(l)}`;
+    tag.textContent = `+${n}`;
+    tag.title = `${n} more ${dir > 0 ? 'under' : 'above'} ${l}: open their tree`;
+    tag.style.left = `${cx}px`;
+    tag.style.top = `${dir > 0 ? y1 + 1 : y1 - 17}px`;
+    canvas.append(tag);
+  };
+  moreUp.forEach((n, l) => stub(l, n, -1));
+  moreDown.forEach((n, l) => stub(l, n, 1));
 
   return { canvas, nodes };
 }
@@ -369,6 +462,13 @@ export const TREE_CSS = `
 .branches { position: absolute; inset: 0; pointer-events: none; }
 .branches path { fill: none; stroke: var(--ir-accent); stroke-width: 2; stroke-linecap: round; opacity: 0.55; }
 .branches path.ended { stroke: var(--ir-faint); stroke-dasharray: 3 5; opacity: 0.7; }
+.branches path.more { stroke: var(--ir-accent); stroke-dasharray: 1 5; opacity: 0.5; }
+.more-count {
+  position: absolute; transform: translateX(-50%); padding: 0 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; line-height: 16px; color: var(--ir-muted); text-decoration: none;
+  background: rgba(var(--ir-accent-rgb), 0.1);
+}
+.more-count:hover { color: var(--ir-text); background: rgba(var(--ir-accent-rgb), 0.22); }
 .node {
   position: absolute; width: ${SLOT}px; box-sizing: border-box; margin: 0;
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 4px 0;

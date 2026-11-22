@@ -83,6 +83,7 @@ html.ir-dark .highcharts-background {
   fill: transparent;
 }
 html.ir-dark :is(.highcharts-grid-line, .highcharts-axis-line, .highcharts-tick),
+html.ir-dark .highcharts-grid path, /* the skills radar's web: unclassed #ddd paths */
 html.ir-dark .highcharts-container path:is([stroke='#D8D8D8'], [stroke='#C0D0E0']) {
   stroke: rgba(255, 255, 255, 0.1);
 }

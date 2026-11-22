@@ -8,8 +8,9 @@
 //   GET /v1/users/:login/family  →  { login, people: { [login]: { image } },
 //                                     links: [{ patron, child, ongoing, since }], truncated }
 //
-// `links` holds the person's ancestors (their patron, that patron's patron, ...) and descendants
-// (who they patron, who those patron, ...), capped so one request can't return a whole campus.
+// `links` holds the person's ancestors (their patron, that patron's patron, ...), descendants
+// (who they patron, who those patron, ...) and siblings (the others their patrons patron) with
+// everyone under them, capped so one request can't return a whole campus.
 import type { FtApi } from './ft-api.ts';
 import type { Db, Patronage } from './db.ts';
 
@@ -177,26 +178,46 @@ export class FamilyService {
     if (level.length) truncated = true;
 
     // Down: who they patron, and so on, breadth first so a cap cuts the deepest generations.
-    level = [login];
-    for (let d = 0; d < MAX_DOWN && level.length; d++) {
-      const next: string[] = [];
-      for (const l of level)
-        for (const p of this.#childrenOf.get(l) ?? []) {
-          if (people.has(p.child)) {
+    // Then the same from their siblings (the others their direct patrons patron).
+    const down = (from: string[]) => {
+      level = from;
+      for (let d = 0; d < MAX_DOWN && level.length; d++) {
+        const next: string[] = [];
+        for (const l of level)
+          for (const p of this.#childrenOf.get(l) ?? []) {
+            if (people.has(p.child)) {
+              add(p);
+              continue;
+            }
+            if (people.size >= MAX_PEOPLE) {
+              truncated = true;
+              continue;
+            }
             add(p);
-            continue;
+            people.add(p.child);
+            next.push(p.child);
           }
-          if (people.size >= MAX_PEOPLE) {
-            truncated = true;
-            continue;
-          }
-          add(p);
-          people.add(p.child);
-          next.push(p.child);
+        level = next;
+      }
+      if (level.some((l) => this.#childrenOf.has(l))) truncated = true;
+    };
+    down([login]);
+    const siblings: string[] = [];
+    for (const p of this.#patronsOf.get(login) ?? [])
+      for (const c of this.#childrenOf.get(p.patron) ?? []) {
+        if (people.has(c.child)) {
+          add(c);
+          continue;
         }
-      level = next;
-    }
-    if (level.some((l) => this.#childrenOf.has(l))) truncated = true;
+        if (people.size >= MAX_PEOPLE) {
+          truncated = true;
+          continue;
+        }
+        add(c);
+        people.add(c.child);
+        siblings.push(c.child);
+      }
+    down(siblings);
 
     return {
       login,
