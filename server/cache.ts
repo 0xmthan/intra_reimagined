@@ -18,6 +18,10 @@ export class TtlCache<V> {
     return hit.value;
   }
 
+  delete(key: string) {
+    this.#map.delete(key);
+  }
+
   set(key: string, value: V, ttlMs: number) {
     this.#map.delete(key); // re-insert so it counts as newest
     this.#map.set(key, { value, expiresAt: Date.now() + ttlMs });

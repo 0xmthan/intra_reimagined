@@ -5,6 +5,8 @@
 //   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
 //                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
 //   GET /v1/users/:login/logtime      →  { login, sessions: [[startMs, endMs|null], …], syncedAt }: all-time logtime (logtime.ts)
+//   GET /v1/users/:login/events       →  { campusId, events: [{ id, name, kind, location, begin, end, subscribers, max }] }: every event at their campus (events.ts)
+//   GET /v1/events/:id/users          →  { id, users: [{ login, name, image }] }: who's subscribed to an event
 //   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
@@ -42,6 +44,7 @@ import { Auth } from './auth.ts';
 import { FamilyService } from './family.ts';
 import { OutstandingService } from './outstanding.ts';
 import { CampusMembers } from './campus.ts';
+import { CampusEvents } from './events.ts';
 
 // Theme choices the extension offers (src/theme.ts MODES / ACCENTS).
 const MODES = ['dark', 'light'];
@@ -89,6 +92,7 @@ const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
 const campusMembers = new CampusMembers(api, db);
+const campusEvents = new CampusEvents(api);
 
 async function getPiscine(login: string): Promise<Piscine | null> {
   const hit = piscineCache.get(login);
@@ -491,8 +495,23 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  const em = url.pathname.match(/^\/v1\/events\/(\d{1,9})\/users$/);
+  if (em) {
+    const me = signedIn(req);
+    if (!me) return send(res, 401, { error: 'login with 42 required' });
+    if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    try {
+      const id = Number(em[1]);
+      return send(res, 200, { id, users: await campusEvents.users(id) }, { 'Cache-Control': 'private, max-age=300' });
+    } catch (e) {
+      if (e instanceof FtApiError && e.status === 404) return send(res, 404, { error: 'unknown event' });
+      console.error(e);
+      return send(res, 502, { error: '42 API unavailable' });
+    }
+  }
+
   const pm = url.pathname.match(/^\/v1\/piscines\/(\d{1,6})\/(\d{4})\/([a-z]+)$/);
-  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family|outstanding|logtime)$/i);
+  const m = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/(piscine|evaluations|family|outstanding|logtime|events)$/i);
   if (!m && !(pm && MONTHS.includes(pm[3]))) return send(res, 404, { error: 'not found' });
 
   const me = signedIn(req);
@@ -514,6 +533,11 @@ const server = createServer(async (req, res) => {
   try {
     if (m[2] === 'family') return send(res, 200, await family.get(login), { 'Cache-Control': 'private, max-age=600' });
     if (m[2] === 'logtime') return send(res, 200, await logtime.get(login), { 'Cache-Control': 'private, max-age=300' });
+    if (m[2] === 'events') {
+      const campusId = (await getPiscine(login))?.campusId;
+      if (!campusId) return send(res, 404, { error: 'unknown campus' });
+      return send(res, 200, { campusId, events: await campusEvents.get(campusId) }, { 'Cache-Control': 'private, max-age=600' });
+    }
     if (m[2] === 'outstanding') return send(res, 200, await outstanding.get(login), { 'Cache-Control': 'private, max-age=600' });
     if (m[2] === 'piscine') {
       const piscine = await getPiscine(login);
