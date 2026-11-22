@@ -2,7 +2,8 @@
 // Kept in memory: the first load fetches the whole history; after that, every REFRESH_MS, only the
 // recent window (a month back, a year ahead) is fetched again and replaces what was there, so new,
 // changed and deleted events show up without refetching years of old ones.
-// Who's subscribed to one event (/v2/events/:id/users) is fetched on demand and cached briefly.
+// Who's subscribed to one event (/v2/events/:id/users) and their feedback (/v2/events/:id/feedbacks)
+// are fetched on demand and cached briefly.
 import type { FtApi } from './ft-api.ts';
 import { TtlCache } from './cache.ts';
 
@@ -28,6 +29,14 @@ export interface EventUser {
   login: string;
   name: string;
   image: string | null;
+}
+
+export interface EventFeedback {
+  login: string;
+  rating: number; // 0–5, overall
+  comment: string;
+  at: number; // ms
+  details: Record<string, number>; // criterion (interesting, pertinent, quality, accuracy) → 0–4
 }
 
 interface ApiEvent {
@@ -57,6 +66,7 @@ export class CampusEvents {
   #memory = new Map<number, { events: Map<number, CampusEvent>; refreshedAt: number }>();
   #inflight = new Map<number, Promise<CampusEvent[]>>();
   #users = new TtlCache<Promise<EventUser[]>>(500);
+  #feedbacks = new TtlCache<Promise<EventFeedback[]>>(500);
 
   constructor(api: FtApi) {
     this.#api = api;
@@ -116,6 +126,37 @@ export class CampusEvents {
       })();
       p.catch(() => this.#users.delete(String(eventId))); // failures aren't cached
       this.#users.set(String(eventId), p, USERS_TTL_MS);
+    }
+    return p;
+  }
+
+  /** Everyone's feedback on an event, oldest first. Throws FtApiError (404: no such event). */
+  feedbacks(eventId: number): Promise<EventFeedback[]> {
+    const key = String(eventId);
+    let p = this.#feedbacks.get(key);
+    if (!p) {
+      p = (async () => {
+        const out: EventFeedback[] = [];
+        for (let page = 1; page <= MAX_USER_PAGES; page++) {
+          const batch = await this.#api.get<
+            { user?: { login?: string } | null; rating?: number | null; comment?: string | null; created_at: string; feedback_details?: { kind: string; rate: number }[] }[]
+          >(`/v2/events/${eventId}/feedbacks?per_page=${PER_PAGE}&page=${page}`);
+          for (const f of batch) {
+            if (!f.user?.login) continue;
+            out.push({
+              login: f.user.login,
+              rating: f.rating ?? 0,
+              comment: f.comment?.trim() ?? '',
+              at: Date.parse(f.created_at),
+              details: Object.fromEntries((f.feedback_details ?? []).map((d) => [d.kind, d.rate])),
+            });
+          }
+          if (batch.length < PER_PAGE) break;
+        }
+        return out.sort((a, b) => a.at - b.at);
+      })();
+      p.catch(() => this.#feedbacks.delete(key));
+      this.#feedbacks.set(key, p, USERS_TTL_MS);
     }
     return p;
   }

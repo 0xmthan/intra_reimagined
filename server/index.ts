@@ -7,6 +7,7 @@
 //   GET /v1/users/:login/logtime      →  { login, sessions: [[startMs, endMs|null], …], syncedAt }: all-time logtime (logtime.ts)
 //   GET /v1/users/:login/events       →  { campusId, events: [{ id, name, kind, location, begin, end, subscribers, max }] }: every event at their campus (events.ts)
 //   GET /v1/events/:id/users          →  { id, users: [{ login, name, image }] }: who's subscribed to an event
+//   GET /v1/events/:id/feedbacks      →  { id, feedbacks: [{ login, rating, comment, at, details: { kind: 0–4 } }] }: its feedback
 //   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
@@ -495,13 +496,14 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  const em = url.pathname.match(/^\/v1\/events\/(\d{1,9})\/users$/);
+  const em = url.pathname.match(/^\/v1\/events\/(\d{1,9})\/(users|feedbacks)$/);
   if (em) {
     const me = signedIn(req);
     if (!me) return send(res, 401, { error: 'login with 42 required' });
     if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
     try {
       const id = Number(em[1]);
+      if (em[2] === 'feedbacks') return send(res, 200, { id, feedbacks: await campusEvents.feedbacks(id) }, { 'Cache-Control': 'private, max-age=300' });
       return send(res, 200, { id, users: await campusEvents.users(id) }, { 'Cache-Control': 'private, max-age=300' });
     } catch (e) {
       if (e instanceof FtApiError && e.status === 404) return send(res, 404, { error: 'unknown event' });
