@@ -5,26 +5,27 @@
 // each friend's seat, level, wallet, eval points, logtime and, for anyone on the blackhole system
 // (probation), the days to that deadline.
 //
-// Their stats come straight from intra with your own session (and logtime from our server), in
-// parts that change at different speeds, each refreshed on its own schedule while the panel is
-// open and the tab is visible (see STALE). The last values are kept in extension storage, so the
-// panel opens filled in on any intra page and updates in place.
+// Their stats come from our server for the whole list in one request (name, photo, seat, level,
+// wallet, eval points, logtime: server/friend-stats.ts), so every row updates at once. Only the
+// days to the next milestone are read from intra with your own session, friend by friend (42's
+// API doesn't have them), on a slow schedule. Each part is refreshed while the panel is open and
+// the tab is visible (see STALE). The last values are kept in extension storage, so the panel
+// opens filled in on any intra page and updates in place.
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { openClusters } from './clusters';
 import { primeUserTip } from './user-tooltip';
-import { fetchFriends, fetchLogtimeSessions, saveFriend } from './profile/data';
+import { fetchFriendStats, fetchFriends, saveFriend } from './profile/data';
 
 const HOST = 'ir-friends';
 const PROFILE = 'https://profile.intra.42.fr';
 const STATS_KEY = 'friendStats';
 const TICK_MS = 60_000;
-const PARALLEL = 2; // friends fetched at once, so a long list doesn't flood intra
+const PARALLEL = 2; // friends whose milestone days are fetched from intra at once
 const MIN = 60_000;
 
-/** How old each part may get while the panel is open. */
-const STALE = { light: 3 * MIN, heavy: 30 * MIN, pace: 6 * 60 * MIN, hours: 10 * MIN } as const;
-type Part = keyof typeof STALE;
+/** How old each part may get while the panel is open: `server` = everything from our server. */
+const STALE = { server: 3 * MIN, pace: 6 * 60 * MIN } as const;
 
 /** `photo`/`groups`: what the hover card shows (handed to it, see primeUserTip). */
 interface Light { name: string; image?: string; photo?: string; groups?: string[]; seat?: string; level?: number; at: number }
@@ -121,51 +122,6 @@ const fetchJson = async <T>(url: string): Promise<T | undefined> => {
   }
 };
 
-/** /users/<login> as JSON (what intra's own hover card uses): name, photo, seat, levels. */
-async function getLight(login: string): Promise<Light | undefined> {
-  const r = await fetchJson<{
-    login: string;
-    usual_full_name?: string;
-    full_name?: string;
-    location?: string | null;
-    image?: { link?: string; versions?: { small?: string; medium?: string; large?: string } };
-    cursus?: Record<string, { level?: number }>[];
-    groups?: { name?: string }[];
-  }>(`${PROFILE}/users/${encodeURIComponent(login)}?ams=true`);
-  if (!r) return undefined;
-  const levels = Object.fromEntries((r.cursus ?? []).flatMap((c) => Object.entries(c)).map(([k, v]) => [k, v?.level]));
-  const nums = Object.values(levels).filter((n): n is number => typeof n === 'number');
-  return {
-    name: r.usual_full_name || r.full_name || login,
-    image: r.image?.versions?.small ?? r.image?.versions?.medium ?? r.image?.link ?? undefined,
-    photo: r.image?.versions?.large ?? r.image?.versions?.medium ?? r.image?.link ?? undefined,
-    // Group names come as HTML (as intra's own tooltip shows them): keep just their text.
-    groups: (r.groups ?? [])
-      .map((g) => (g.name ? new DOMParser().parseFromString(g.name, 'text/html').body.textContent?.trim() : '') ?? '')
-      .filter(Boolean),
-    seat: r.location || undefined,
-    level: typeof levels['42cursus'] === 'number' ? levels['42cursus'] : nums.length ? Math.max(...nums) : undefined,
-    at: Date.now(),
-  };
-}
-
-/** Wallet and eval points are only on the full profile page (~400 KB), hence the slow schedule. */
-async function getHeavy(login: string): Promise<Heavy | undefined> {
-  try {
-    const res = await fetch(`${PROFILE}/users/${encodeURIComponent(login)}`, { credentials: 'include', headers: { Accept: 'text/html' } });
-    if (!res.ok) return undefined;
-    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-    const txt = (s: string) => doc.querySelector(s)?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
-    return {
-      wallet: txt('.user-wallet-value')?.replace(/\s*₳$/, ''),
-      evalPoints: txt('.user-correction-point-value > div') ?? txt('.user-correction-point-value'),
-      at: Date.now(),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
 /** Days to the next pace milestone (or the old blackhole, or the end of a freeze). */
 async function getPace(login: string): Promise<Pace | undefined> {
   const g = await fetchJson<{
@@ -188,67 +144,65 @@ async function getPace(login: string): Promise<Pace | undefined> {
   return { kind: 'none', probation: false, at };
 }
 
-/** This week (since Monday, local time) and all time, from every session our server has. */
-async function getHours(login: string): Promise<Hours | undefined> {
-  const sessions = await fetchLogtimeSessions(login);
-  if (!sessions) return undefined;
-  const now = Date.now();
+/** The start of this week (Monday 00:00, local time), for "this week" logtime. */
+function mondayStart() {
   const d = new Date();
-  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime();
-  let total = 0;
-  let week = 0;
-  for (const [a, b] of sessions) {
-    const end = Math.min(b ?? now, now);
-    total += Math.max(0, end - a);
-    week += Math.max(0, end - Math.max(a, monday));
-  }
-  return { week: week / 3_600_000, total: total / 3_600_000, at: now };
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime();
 }
 
-const GETTERS: Record<Part, (login: string) => Promise<Stats[Part] | undefined>> = {
-  light: getLight,
-  heavy: getHeavy,
-  pace: getPace,
-  hours: getHours,
-};
+let serverAt = 0;
+let serverInflight: Promise<void> | undefined;
+
+/** Everything our server knows for the whole list, in one request; rows update together. */
+function refreshFromServer(): Promise<void> {
+  serverInflight ??= fetchFriendStats(mondayStart())
+    .then((all) => {
+      if (!all) return;
+      serverAt = Date.now();
+      for (const [login, x] of Object.entries(all)) {
+        const s = (stats[login] ??= {});
+        if (x.at) {
+          s.light = { name: x.name, image: x.image, photo: x.photo, groups: s.light?.groups, seat: x.seat, level: x.level, at: x.at };
+          s.heavy = { wallet: x.wallet === undefined ? undefined : String(x.wallet), evalPoints: x.evalPoints === undefined ? undefined : String(x.evalPoints), at: x.at };
+        }
+        if (x.hours) s.hours = x.hours;
+      }
+      save(STATS_KEY, stats);
+      render();
+    })
+    .finally(() => (serverInflight = undefined));
+  return serverInflight;
+}
 
 /** The stats saved last time, so the panel opens filled in. */
 const loadStats = () => (statsLoaded ??= load<Record<string, Stats>>(STATS_KEY).then((s) => void (stats = { ...(s ?? {}), ...stats })));
 
-/** Refreshes whatever is stale for these friends (everything, if forced), PARALLEL at a time. */
+/** Refreshes whatever is stale for these friends (everything, if forced). */
 async function refresh(logins: string[], force = false) {
   await loadStats();
-  const jobs: [string, Part][] = [];
-  for (const login of logins) {
-    for (const part of Object.keys(STALE) as Part[]) {
-      // Saved before probation (pace) or the hover card's photo (light) were recorded: fetch again.
-      const old =
-        (part === 'pace' && stats[login]?.pace && stats[login]!.pace!.probation === undefined) ||
-        (part === 'light' && stats[login]?.light && stats[login]!.light!.photo === undefined);
-      const at = old ? 0 : (stats[login]?.[part]?.at ?? 0);
-      if ((force || Date.now() - at > STALE[part]) && !inflight.has(`${login}:${part}`)) jobs.push([login, part]);
-    }
-  }
-  // One friend's parts together, so rows fill in one at a time.
-  const queue = [...jobs];
+  // Someone added since the last server answer has nothing yet: ask again.
+  const unseen = logins.some((l) => !stats[l]?.light);
+  const server = force || unseen || Date.now() - serverAt > STALE.server ? refreshFromServer() : undefined;
+  // Milestone days: from intra, friend by friend, PARALLEL at a time (they change slowly).
+  const queue = logins.filter((login) => {
+    const p = stats[login]?.pace;
+    const at = p && p.probation !== undefined ? p.at : 0; // saved before probation was recorded: fetch again
+    return (force || Date.now() - at > STALE.pace) && !inflight.has(login);
+  });
   const worker = async () => {
-    for (let job = queue.shift(); job; job = queue.shift()) {
-      const [login, part] = job;
-      const key = `${login}:${part}`;
-      inflight.add(key);
+    for (let login = queue.shift(); login; login = queue.shift()) {
+      inflight.add(login);
       try {
-        const value = await GETTERS[part](login);
-        if (value) (stats[login] ??= {})[part] = value as never;
+        const value = await getPace(login);
+        if (value) (stats[login] ??= {}).pace = value;
       } finally {
-        inflight.delete(key);
+        inflight.delete(login);
       }
-      if (!queue.some(([l]) => l === login)) {
-        save(STATS_KEY, stats);
-        render();
-      }
+      save(STATS_KEY, stats);
+      render();
     }
   };
-  await Promise.all(Array.from({ length: PARALLEL }, worker));
+  await Promise.all([server, ...Array.from({ length: PARALLEL }, worker)]);
   lastRefresh = Date.now();
   render();
 }
@@ -558,7 +512,8 @@ function render() {
   const away = order.filter((l) => !stats[l]?.light?.seat);
   for (const l of order) {
     const x = stats[l]?.light;
-    if (x) primeUserTip({ login: l, name: x.name, image: x.photo ?? x.image, location: x.seat, groups: x.groups ?? [] });
+    // The hover card needs their groups too: hand it what we have only when we know them.
+    if (x?.groups) primeUserTip({ login: l, name: x.name, image: x.photo ?? x.image, location: x.seat, groups: x.groups });
   }
   const heading = (text: string) => {
     const h = document.createElement('h3');

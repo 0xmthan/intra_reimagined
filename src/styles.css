@@ -22,12 +22,14 @@
   --ir-accent-rgb: 0, 186, 188; /* for rgba(var(--ir-accent-rgb), a) */
   --ir-accent-hi: #2ee6e8; /* brighter: highlights, strongest heat cells */
   --ir-accent-soft: #4fd1d3; /* lighter: links on dark surfaces */
+  --ir-accent-muted: #4fb8bd; /* calmer fill: done milestones on the header's timeline */
 }
 :root[data-ir-accent='green'] {
   --ir-accent: #3ddc84;
   --ir-accent-rgb: 61, 220, 132;
   --ir-accent-hi: #74f0a8;
   --ir-accent-soft: #6be3a0;
+  --ir-accent-muted: #2f9e62;
 }
 :root[data-ir-mode='light'] {
   --ir-bg: #f4f5f7;
@@ -616,6 +618,9 @@ html.ir-embed .page-content .container-item {
 /* Marks rows: smaller than intra's default, closer to the rest of the card. */
 #ir-home-marks .project-item { font-size: 14px; line-height: 20px; padding: 4px 10px; }
 #ir-home-marks .marked-title, #ir-home-marks .marked-title a { font-size: 13.5px; line-height: 20px; }
+/* Project names and evaluation links (events, logins) are intra's links in its fixed teal:
+   follow the accent theme instead. */
+.ir-home-grid > :is([data-ir-card='projects'], [data-ir-card='evals']) a:not(.btn, .simple-link) { color: var(--ir-accent); }
 #ir-home-marks .project-item-lighteable { font-size: 12.5px; color: var(--ir-faint); margin-left: 4px; }
 #ir-home-marks .main-project-item > .pull-right { font-size: 15px; font-weight: 600; }
 #ir-home-marks .main-project-item > .pull-right::before { font-size: 15px; }
@@ -751,13 +756,16 @@ html.ir-embed .page-content .container-item {
   --g-muted: rgba(var(--ir-ink-text), 0.66);
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 356px 430px 430px 430px;
+  /* Evaluations is a full-width strip that sizes to its content (auto row). Achievements reaches up
+     into Projects' column (rows 4–5), so pinned ones and the list fit. */
+  grid-template-rows: 356px auto 280px 130px 430px;
   grid-auto-rows: 430px;
   grid-template-areas:
     'projects logtime logtime'
-    'projects evals agenda'
-    'skills achievements agenda'
-    'patronages patronages patronages';
+    'projects evals evals'
+    'projects patronages agenda'
+    'achievements patronages agenda'
+    'achievements skills agenda';
   gap: 20px;
   margin: 20px 0 24px !important; /* below the news bar: the same 20px as between cards */
   padding: 0 15px;
@@ -883,14 +891,15 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 @media (max-width: 1199px) {
   .row.ir-home-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: 356px 400px 400px 400px 400px;
+    grid-template-rows: 356px auto 400px 400px 400px 400px;
     grid-auto-rows: 400px;
     grid-template-areas:
       'logtime logtime'
-      'projects evals'
+      'evals evals'
       'projects agenda'
-      'skills agenda'
-      'achievements patronages';
+      'projects agenda'
+      'skills achievements'
+      'patronages achievements';
   }
 }
 @media (max-width: 767px) {
@@ -915,18 +924,8 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   .ir-home-grid > [data-ir-card='patronages'] { order: 7; }
 }
 
-/* Evaluations with nothing real coming up: a slim full-width strip, and Patronages gets wide. */
-.row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
-  /* Achievements reaches up into Projects' column (rows 4–5), so pinned ones and the list fit. */
-  grid-template-rows: 356px auto 280px 130px 430px;
-  grid-template-areas:
-    'projects logtime logtime'
-    'projects evals evals'
-    'projects patronages agenda'
-    'achievements patronages agenda'
-    'achievements skills agenda';
-}
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item {
+/* Evaluations: a slim full-width strip, one line when nothing is coming up, growing to list what is. */
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item {
   flex-direction: row !important;
   flex-wrap: wrap;
   align-items: center;
@@ -934,9 +933,9 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   row-gap: 4px;
   padding: 10px 20px !important;
 }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title { display: contents !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { order: 3; margin-left: 0 !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item {
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title { display: contents !important; }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title > .pull-right { order: 3; margin-left: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item {
   order: 2;
   flex: 1 1 auto;
   display: flex !important;
@@ -945,52 +944,43 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
   column-gap: 18px;
   overflow: visible !important;
 }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #collapseEvaluations { display: contents !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] .ir-eval-empty { padding: 0; font-size: 13.5px; }
+.ir-home-grid > [data-ir-card='evals'] #collapseEvaluations { display: contents !important; }
+.ir-home-grid > [data-ir-card='evals'] .ir-eval-empty { padding: 0; font-size: 13.5px; }
 /* One line height for everything on the strip, so title, text and buttons sit on the same middle. */
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { height: auto !important; align-self: center; padding: 0 !important; margin: 0 !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] :is(.ir-eval-empty, #ir-patronage-reviews > summary) { line-height: 28px; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title { line-height: 28px !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] .ir-slots { padding: 0; column-gap: 10px; flex: 0 1 auto; min-width: 0; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item { height: auto !important; align-self: center; padding: 0 !important; margin: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'] :is(.ir-eval-empty, #ir-patronage-reviews > summary) { line-height: 28px; }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title { line-height: 28px !important; }
+.ir-home-grid > [data-ir-card='evals'] .ir-slots { padding: 0; column-gap: 10px; flex: 0 1 auto; min-width: 0; }
 /* With slots open, the green line says it all: no "No evaluations coming up." */
-.ir-home-grid > [data-ir-card='evals'][data-empty] .container-inner-item.ir-slot-on .ir-eval-empty { display: none; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { flex-wrap: nowrap !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) > .overflowable-item { flex-wrap: wrap !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews:not([open]) { flex: none; }
+.ir-home-grid > [data-ir-card='evals'] .container-inner-item.ir-slot-on .ir-eval-empty { display: none; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item { flex-wrap: nowrap !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]) > .overflowable-item, .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item > .overflowable-item { flex-wrap: wrap !important; }
+.ir-home-grid > [data-ir-card='evals'] #ir-patronage-reviews:not([open]) { flex: none; }
 .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:not(:has(#ir-patronage-reviews[open])) { flex-wrap: nowrap; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { min-width: 0; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { flex: none; flex-wrap: nowrap; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews { margin: 0; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews > summary { margin: 0; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] {
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item { min-width: 0; }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title > .pull-right { flex: none; flex-wrap: nowrap; }
+.ir-home-grid > [data-ir-card='evals'] #ir-patronage-reviews { margin: 0; }
+.ir-home-grid > [data-ir-card='evals'] #ir-patronage-reviews > summary { margin: 0; }
+.ir-home-grid > [data-ir-card='evals'] #ir-patronage-reviews[open] {
   flex-basis: 100%;
   max-height: 280px;
   overflow: auto;
   padding-bottom: 6px;
 }
-.ir-home-grid > [data-ir-card='evals'][data-empty] #ir-patronage-reviews[open] > summary { margin: 4px 0 6px; }
-@media (max-width: 1199px) {
-  .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) {
-    grid-template-rows: 356px auto 400px 400px 400px 400px;
-    grid-template-areas:
-      'logtime logtime'
-      'evals evals'
-      'projects agenda'
-      'projects agenda'
-      'skills achievements'
-      'patronages achievements';
-  }
-}
+.ir-home-grid > [data-ir-card='evals'] #ir-patronage-reviews[open] > summary { margin: 4px 0 6px; }
 @media (max-width: 767px) {
-  .ir-home-grid > [data-ir-card='evals'][data-empty] { height: auto !important; }
-  /* One column: the areas above would otherwise still make two (one of them 0 wide). */
-  .row.ir-home-grid:has(> [data-ir-card='evals'][data-empty]) { grid-template-rows: none; grid-template-areas: none; }
+  .ir-home-grid > [data-ir-card='evals'] { height: auto !important; }
 }
 
+/* Real evaluations coming up: the strip grows to list them under its first line (like opened
+   reviews do), each on its own line, with the reviews toggle below them. */
+.ir-home-grid > [data-ir-card='evals']:not([data-empty]) .overflowable-item > .project-item,
+.ir-home-grid > [data-ir-card='evals']:not([data-empty]) #ir-patronage-reviews { flex-basis: 100%; }
+
 /* Reviews opened: keep the title and Manage slots on the strip's first line. */
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) { align-items: flex-start; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title > .pull-right { margin-top: 0 !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title::before { margin-top: 6px; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]), .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item { align-items: flex-start; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title > .pull-right, .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item h4.profile-title > .pull-right { margin-top: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title::before, .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item h4.profile-title::before { margin-top: 6px; }
 
 /* Cards take their size from the grid, not from their content (a long Projects list spanning the
    evaluations strip's row would otherwise stretch that row). The strip itself sizes to its content. */
@@ -1436,17 +1426,17 @@ html.ir-slots-page.ir-embed, html.ir-slots-page.ir-embed body { overflow: hidden
 html.ir-slots-page #calendar.fc { max-width: none !important; width: auto !important; margin: 0 !important; }
 html.ir-slots-page.ir-embed .page-content .container-item:has(#calendar) { margin: 0 !important; }
 /* Reviews opened: title and buttons on the first line, everything else full width below. */
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title > .pull-right { order: 1; margin-left: auto !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item:has(#ir-patronage-reviews[open]) > .overflowable-item { order: 2; flex-basis: 100%; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]) h4.profile-title > .pull-right, .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item h4.profile-title > .pull-right { order: 1; margin-left: auto !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item:has(#ir-patronage-reviews[open]) > .overflowable-item, .ir-home-grid > [data-ir-card='evals']:not([data-empty]) > .container-inner-item > .overflowable-item { order: 2; flex-basis: 100%; }
 /* Whatever wraps in the middle (many slots), the title and the two buttons stay on the top line. */
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item { align-items: flex-start !important; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title::before { margin-top: 6px; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { margin-top: 0 !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item { align-items: flex-start !important; }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title::before { margin-top: 6px; }
+.ir-home-grid > [data-ir-card='evals'] h4.profile-title > .pull-right { margin-top: 0 !important; }
 .ir-home-grid > [data-ir-card='evals'] .ir-slots { row-gap: 0; }
 /* A slot's × shows on hover, in the gap after it (no room taken). */
 .ir-slots { column-gap: 21px !important; }
 .ir-slots > .ir-slot-label { margin-right: -7px; }
-.ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { align-items: flex-start !important; }
+.ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item { align-items: flex-start !important; }
 .ir-slots > .ir-slot.same-day { margin-left: 0; }
 .ir-slot { position: relative; }
 .ir-slot > button { position: absolute; left: 100%; margin-left: 3px; opacity: 0 !important; }
@@ -1787,9 +1777,9 @@ html.ir-embed .ir-ap { padding: 18px 20px 28px; }
 @media (max-width: 767px) {
   html.ir-logo-pinned #ir-logo { position: absolute !important; }
   /* The empty Evaluations strip: title and buttons on top, the rest on its own line. */
-  .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item { flex-wrap: wrap !important; }
-  .ir-home-grid > [data-ir-card='evals'][data-empty] h4.profile-title > .pull-right { order: 1; margin-left: auto !important; }
-  .ir-home-grid > [data-ir-card='evals'][data-empty] > .container-inner-item > .overflowable-item { order: 2; flex: 1 1 100%; flex-wrap: wrap !important; }
+  .ir-home-grid > [data-ir-card='evals'] > .container-inner-item { flex-wrap: wrap !important; }
+  .ir-home-grid > [data-ir-card='evals'] h4.profile-title > .pull-right { order: 1; margin-left: auto !important; }
+  .ir-home-grid > [data-ir-card='evals'] > .container-inner-item > .overflowable-item { order: 2; flex: 1 1 100%; flex-wrap: wrap !important; }
 }
 
 /* Behind the card grid the page stays the page color: the dark theme sometimes paints intra's

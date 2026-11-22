@@ -32,11 +32,15 @@ html.ir-dark :is(.container-inner-item.boxed, .achievement-item--image, .modal-h
 }
 
 /* Hover/active states that are light on intra. */
-html.ir-dark :is(.dropdown-menu > li > a, .nav-pills > li > a, .list-group-item, .menu-drop-item a, .table-hover > tbody > tr):hover,
+html.ir-dark :is(.dropdown-menu > li > a, .nav-pills > li > a, .list-group-item:not(.team-item), .menu-drop-item a, .table-hover > tbody > tr):hover,
 html.ir-dark :is(.nav-pills > li.active > a:not([style*='background']), .dropdown-menu > .active > a) {
   background-color: var(--ir-surface-3) !important;
   color: var(--ir-text) !important;
 }
+/* A project page's team box (projects_users): a whole block of content, not a clickable row, so no
+   hover; and its name keeps its link color instead of intra's darker hover teal. */
+.team-item .team-header:is(:hover, :focus) { color: #00babc; }
+
 html.ir-dark .menu-drop-item.unread {
   background-color: var(--ir-surface-2) !important;
 }

@@ -354,6 +354,54 @@ export async function fetchFriends(): Promise<string[] | 'auth' | undefined> {
   return j === 'auth' ? 'auth' : j ? friendList(j.friends) : undefined;
 }
 
+export interface FriendStat {
+  name: string;
+  image?: string;
+  photo?: string;
+  seat?: string;
+  level?: number;
+  wallet?: number;
+  evalPoints?: number;
+  at: number;
+  hours?: { week: number; total: number; at: number };
+}
+
+/**
+ * Stats for your whole friends list in one request (server: friend-stats.ts): name, photo, seat,
+ * level, wallet, eval points and logtime (this week counts from `weekStart`, your Monday in ms).
+ */
+export async function fetchFriendStats(weekStart: number): Promise<Record<string, FriendStat> | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ friends?: Record<string, unknown> }>(`/v1/me/friends/stats?week=${Math.round(weekStart)}`, 'no-cache');
+  if (!j || j === 'auth' || !j.friends || typeof j.friends !== 'object') return undefined;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const out: Record<string, FriendStat> = {};
+  for (const [login, raw] of Object.entries(j.friends)) {
+    if (!LOGIN_RE.test(login) || !raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const h = r.hours as Record<string, unknown> | undefined;
+    const hours = h && num(h.week) !== undefined && num(h.total) !== undefined ? { week: h.week as number, total: h.total as number, at: num(h.at) ?? Date.now() } : undefined;
+    if (typeof r.name !== 'string') {
+      if (hours) out[login] = { name: login, at: 0, hours }; // logtime only (42 didn't answer for them)
+      continue;
+    }
+    out[login] = {
+      name: r.name,
+      // Only 42's own image host reaches the page.
+      image: str(r.image)?.startsWith('https://') ? (r.image as string) : undefined,
+      photo: str(r.photo)?.startsWith('https://') ? (r.photo as string) : undefined,
+      seat: str(r.seat),
+      level: num(r.level),
+      wallet: num(r.wallet),
+      evalPoints: num(r.evalPoints),
+      at: num(r.at) ?? Date.now(),
+      hours,
+    };
+  }
+  return out;
+}
+
 /** Adds or removes a friend; the new list, or a message to show. Nothing is sent to them. */
 export async function saveFriend(login: string, add: boolean): Promise<{ friends: string[] } | { error: string }> {
   const token = await getToken();

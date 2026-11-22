@@ -10,7 +10,7 @@
   --line: rgba(255, 255, 255, 0.09);
   --danger: #ff5a5f;
   --ok: #3ddc84;
-  --done: #4fb8bd;
+  --done: var(--ir-accent-muted, #4fb8bd); /* follows the accent theme (styles.css) */
   --todo: rgba(79, 184, 189, 0.22);
 }
 

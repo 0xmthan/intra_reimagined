@@ -61,6 +61,19 @@ export class FtApi {
     return run;
   }
 
+  /**
+   * A student photo from 42's CDN (it refuses requests without a 42 session or token). Not queued:
+   * the CDN isn't the API and doesn't count toward its limit.
+   */
+  async image(url: string): Promise<{ type: string; data: Buffer }> {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${await this.#getToken(attempt > 0)}` } });
+      if (res.ok) return { type: res.headers.get('content-type') ?? '', data: Buffer.from(await res.arrayBuffer()) };
+      if (res.status === 401 && attempt < 1) continue;
+      throw new FtApiError(res.status, `42 CDN ${url} → ${res.status}`);
+    }
+  }
+
   /** GET a v2 path (e.g. `/v2/users/mtaheri`) as JSON. Throws FtApiError on failure. */
   get<T>(path: string): Promise<T> {
     // Retries happen inside the queued task (re-queueing from inside it would deadlock).

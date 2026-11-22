@@ -24,10 +24,18 @@ export function tidyEvaluations() {
   if (!list) return;
   list.classList.add('in');
 
+  // Event links ("3 days left to feedback: <event>") open intra's event popup, like the Agenda's do:
+  // ask for the same popup class so it gets the Agenda's popup look, and don't jump to the top
+  // (they link to "#").
+  for (const a of list.querySelectorAll<HTMLAnchorElement>('a[data-smart-modal][data-url^="/events/"]')) {
+    if (!a.dataset.class) a.dataset.class = 'event-modal';
+    a.addEventListener('click', (e) => e.preventDefault());
+  }
+
   const items = [...list.querySelectorAll(':scope > .project-item')];
   const reviews = items.filter(isPatronageReview);
   if (reviews.length === items.length) {
-    // Nothing real coming up: the home grid shows this card as a slim strip (home-grid.ts, styles.css).
+    // Nothing real coming up: the home grid's strip stays one line (styles.css).
     card.parentElement?.setAttribute('data-empty', '');
     const empty = document.createElement('div');
     empty.className = 'ir-eval-empty';

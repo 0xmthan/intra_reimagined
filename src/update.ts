@@ -1,13 +1,16 @@
-// "New version available" for Chrome copies. Firefox updates itself (updates.json), but Chrome only
-// auto-updates Web Store extensions, so the Chrome zip from /install is updated by hand: tell the
-// user when the server has a newer one. Checked at most every 6 hours; "Later" hides it for a day.
+// "New version available": tell the user when the server has a newer version than this one.
+//  - Chrome only auto-updates Web Store extensions, so the Chrome zip is updated by hand.
+//  - Firefox updates itself from updates.json, but only checks about once a day (and an extension
+//    can't make it check sooner: runtime.requestUpdateCheck isn't in Firefox). Opening the new .xpi
+//    installs it over this one, so the card's button does that.
+// Checked at most every 30 minutes (the server caches the answer for 5); "Later" hides it for a day.
 import { PLANET } from './gate';
 import { setHTML } from './html';
 
 const IR_API = (import.meta.env.VITE_IR_API as string | undefined)?.replace(/\/+$/, '');
 const CHECK_KEY = 'updateCheck'; // { at, latest }
 const SNOOZE_KEY = 'updateSnooze'; // { version, until }
-const CHECK_EVERY = 6 * 3_600_000;
+const CHECK_EVERY = 30 * 60_000;
 const SNOOZE_FOR = 24 * 3_600_000;
 
 interface Manifest {
@@ -22,20 +25,37 @@ const ext = ((globalThis as { browser?: Ext }).browser ?? (globalThis as { chrom
 
 const num = (v: string) => v.split('.').map(Number).reduce((acc, n) => acc * 1000 + (n || 0), 0);
 
-/** The installed version and, if the server has a newer Chrome build, its version. */
+/** Firefox copies carry Firefox's settings in their manifest; the Chrome zip doesn't. */
+const isFirefox = () => !!ext?.runtime.getManifest().browser_specific_settings;
+
+/** The newest version the server offers for this browser, or undefined. */
+async function fetchLatest(): Promise<string | undefined> {
+  if (isFirefox()) {
+    const res = await fetch(`${IR_API}/updates.json`, { credentials: 'omit' });
+    if (!res.ok) return undefined;
+    const j = (await res.json()) as { addons?: Record<string, { updates?: { version?: unknown }[] }> };
+    const versions = Object.values(j.addons ?? {})
+      .flatMap((a) => a.updates ?? [])
+      .map((u) => u.version)
+      .filter((v): v is string => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v));
+    return versions.sort((a, b) => num(b) - num(a))[0];
+  }
+  const res = await fetch(`${IR_API}/chrome/latest.json`, { credentials: 'omit' });
+  const v = res.ok ? ((await res.json()) as { version?: unknown }).version : undefined;
+  return typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : undefined;
+}
+
+/** The installed version and, if the server has a newer build for this browser, its version. */
 export async function updateInfo(): Promise<{ current: string; latest?: string } | undefined> {
   const manifest = ext?.runtime.getManifest();
-  // Only the Chrome zip lacks Firefox's settings; Firefox copies update themselves.
-  if (!ext || !IR_API || !manifest || manifest.browser_specific_settings) return undefined;
+  if (!ext || !IR_API || !manifest) return undefined;
   const current = manifest.version;
   let latest: string | undefined;
   try {
     const cached = (await ext.storage.local.get(CHECK_KEY))[CHECK_KEY] as { at: number; latest?: string } | undefined;
     if (cached && Date.now() - cached.at < CHECK_EVERY) latest = cached.latest;
     else {
-      const res = await fetch(`${IR_API}/chrome/latest.json`, { credentials: 'omit' });
-      const v = res.ok ? ((await res.json()) as { version?: unknown }).version : undefined;
-      latest = typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : undefined;
+      latest = await fetchLatest();
       await ext.storage.local.set({ [CHECK_KEY]: { at: Date.now(), latest } });
     }
   } catch {
@@ -44,7 +64,8 @@ export async function updateInfo(): Promise<{ current: string; latest?: string }
   return { current, latest: latest && num(latest) > num(current) ? latest : undefined };
 }
 
-export const installUrl = () => `${IR_API}/install`;
+/** Firefox: the newest .xpi (opening it installs it over this one). Chrome: the install page, at its update steps. */
+export const installUrl = () => (isFirefox() ? `${IR_API}/firefox/latest.xpi` : `${IR_API}/install#update`);
 
 /** Corner card on intra pages when a newer version is out (unless snoozed for it). */
 export async function notifyUpdate() {
@@ -62,9 +83,9 @@ export async function notifyUpdate() {
       <div class="logo">${PLANET}</div>
       <div class="text">
         <b>Update available</b>
-        <span>Intra Reimagined ${info.latest} is out (you have ${info.current}).</span>
+        <span>Intra Reimagined ${info.latest} is out (you have ${info.current}).${isFirefox() ? ' Firefox asks to install it, then you\'re on the new one.' : ''}</span>
         <div class="actions">
-          <a class="primary" href="${installUrl()}" target="_blank" rel="noopener">Download</a>
+          <a class="primary" href="${installUrl()}" target="_blank" rel="noopener">${isFirefox() ? 'Update' : 'Download'}</a>
           <button class="later">Later</button>
         </div>
       </div>

@@ -17,10 +17,14 @@
 //     and their theme (yours always; someone else's only if they share it)
 //   GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login  →  { friends: [{ login, addedAt }] }: your private
 //                                     friends list (one-way: adding someone sends them nothing, and only you see it)
+//   GET /v1/me/friends/stats?week=<ms>  →  { friends: { login: { name, image, photo, seat, level, wallet,
+//                                     evalPoints, at, hours?: { week, total, at } } } }: the friends panel's stats
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
+//   GET /friends                      →  your friends list on the web, for phones (friends-page.ts)
 //
 // Piscines never change: memory → Postgres (DATABASE_URL, optional) → 42 API, saved on the way back.
 // Run: node index.ts (Node 23.6+ runs TypeScript directly), or docker compose up. Config: .env.example.
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { FtApi, FtApiError } from './ft-api.ts';
@@ -29,6 +33,8 @@ import { RateLimiter } from './rate-limit.ts';
 import { Db, type Piscine } from './db.ts';
 import { EvalService } from './evals.ts';
 import { LogtimeService } from './logtime.ts';
+import { FriendStatsService } from './friend-stats.ts';
+import { serveFriendsPage } from './friends-page.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
 import { Auth } from './auth.ts';
@@ -77,6 +83,7 @@ if (db) await db.init();
 else console.warn('No DATABASE_URL: data is only cached in memory.');
 const evals = new EvalService(api, db);
 const logtime = new LogtimeService(api, db);
+const friendStats = new FriendStatsService(api);
 const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
@@ -112,6 +119,55 @@ async function getPiscine(login: string): Promise<Piscine | null> {
     }
     throw e;
   }
+}
+
+// ---------- student photos for /friends ----------
+// 42's CDN only serves photos to a 42 session or token, so the /friends page (our own domain, often
+// a phone with no intra login) gets them through here. Only links we signed are served, and only
+// signed-in users get those: this is not an open mirror of 42's photos.
+const CDN = 'https://cdn.intra.42.fr';
+const PHOTO_PATH = /^\/users\/[a-f0-9]{32}\/[a-z0-9_.-]{1,80}\.(jpe?g|png|gif|webp)$/i;
+const photoSig = (path: string) => createHmac('sha256', AUTH_SECRET!).update(`photo:${path}`).digest('base64url').slice(0, 22);
+const photoCache = new TtlCache<{ type: string; data: Buffer }>(400);
+
+/** A 42 CDN photo URL as a signed link to /photo, or undefined if it isn't one. */
+function photoLink(url: string | undefined): string | undefined {
+  if (!url?.startsWith(`${CDN}/`)) return undefined;
+  const path = url.slice(CDN.length);
+  return PHOTO_PATH.test(path) ? `/photo?${new URLSearchParams({ p: path, s: photoSig(path) })}` : undefined;
+}
+
+async function sendPhoto(url: URL, res: ServerResponse) {
+  const path = url.searchParams.get('p') ?? '';
+  const sig = Buffer.from(url.searchParams.get('s') ?? '');
+  const want = Buffer.from(photoSig(path));
+  if (!PHOTO_PATH.test(path) || sig.length !== want.length || !timingSafeEqual(sig, want)) return send(res, 403, { error: 'forbidden' });
+  try {
+    let img = photoCache.get(path);
+    if (!img) {
+      img = await api.image(`${CDN}${path}`);
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(img.type)) return send(res, 502, { error: 'not an image' });
+      photoCache.set(path, img, DAY);
+    }
+    res.writeHead(200, { 'Content-Type': img.type, 'Content-Length': String(img.data.length), 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+    res.end(img.data);
+  } catch (e) {
+    console.error(e);
+    send(res, 502, { error: 'photo unavailable' });
+  }
+}
+
+/** Hours logged since `weekStart` and in total, from [start, end|null] sessions. */
+function logtimeHours(sessions: [number, number | null][], weekStart: number) {
+  const now = Date.now();
+  let total = 0;
+  let week = 0;
+  for (const [a, b] of sessions) {
+    const end = Math.min(b ?? now, now);
+    total += Math.max(0, end - a);
+    week += Math.max(0, end - Math.max(a, weekStart));
+  }
+  return { week: week / 3_600_000, total: total / 3_600_000, at: now };
 }
 
 // Anyone with a valid token uses the extension: remember them for the badge (at most hourly per login).
@@ -165,6 +221,7 @@ const server = createServer(async (req, res) => {
     return send(res, 405, { error: 'method not allowed' });
   }
   if (serveRelease(url.pathname, req, res)) return;
+  if (serveFriendsPage(url.pathname, res)) return;
   if (url.pathname === '/health') {
     try {
       await db?.ping();
@@ -177,6 +234,11 @@ const server = createServer(async (req, res) => {
   if (url.pathname.startsWith('/auth/')) {
     if (!authLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
     if (await auth.handle(url, res)) return;
+  }
+
+  if (url.pathname === '/photo') {
+    if (!imageLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    return sendPhoto(url, res);
   }
 
   if (url.pathname.startsWith('/banners/')) {
@@ -339,6 +401,45 @@ const server = createServer(async (req, res) => {
       }
       console.error(e);
       return send(res, 500, { error: 'could not save' });
+    }
+  }
+
+  // Everything the friends panel shows for your whole list in one go (friend-stats.ts), plus logtime
+  // this week (since `week`: the start of the viewer's Monday, in ms) and all time.
+  if (url.pathname === '/v1/me/friends/stats') {
+    req.resume();
+    const me = signedIn(req);
+    if (!me) return send(res, 401, { error: 'login with 42 required' });
+    if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    if (!db) return send(res, 503, { error: 'friends need the database' });
+    const week = Number(url.searchParams.get('week'));
+    const weekStart = Number.isFinite(week) && week > 0 ? week : Date.now() - 7 * DAY;
+    try {
+      const list = (await db.getFriends(me)).map((f) => f.login);
+      const [stats, hours] = await Promise.all([
+        friendStats.get(list),
+        // Logtime is kept per student (logtime.ts); someone never synced before can take a while:
+        // left out this time rather than holding up the panel.
+        Promise.all(
+          list.map((l) =>
+            Promise.race([logtime.get(l), new Promise<undefined>((r) => setTimeout(r, 1500))]).then(
+              (t): [string, ReturnType<typeof logtimeHours> | undefined] => [l, t ? logtimeHours(t.sessions, weekStart) : undefined],
+              (): [string, undefined] => [l, undefined],
+            ),
+          ),
+        ),
+      ]);
+      // ?photos=proxy (the /friends page): photos as signed links through /photo (see photoLink).
+      const proxy = url.searchParams.get('photos') === 'proxy';
+      const friends: Record<string, unknown> = {};
+      for (const [l, h] of hours) {
+        const s = stats[l];
+        friends[l] = s && proxy ? { ...s, image: photoLink(s.image), photo: photoLink(s.photo), hours: h } : { ...s, hours: h };
+      }
+      return send(res, 200, { friends }, { 'Cache-Control': 'private, no-cache' });
+    } catch (e) {
+      console.error(e);
+      return send(res, 502, { error: '42 API unavailable' });
     }
   }
 

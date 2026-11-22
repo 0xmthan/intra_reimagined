@@ -2,8 +2,9 @@
 // secret never leaves the server); at the end we hand the extension our own signed token by
 // redirecting back to the intra page it came from, with the token in the URL fragment.
 //
-//   GET /auth/start?state=<nonce>&return=<intra url>  →  302 to 42's authorize page
-//   GET /auth/callback?code&state                     →  302 to <intra url>#ir-auth=<token>&ir-state=<nonce>
+//   GET /auth/start?state=<nonce>&return=<url>  →  302 to 42's authorize page
+//   GET /auth/callback?code&state               →  302 to <url>#ir-auth=<token>&ir-state=<nonce>
+// <url> is an intra page (the extension) or our own /friends page (friends-page.ts).
 //
 // Token: "<login>.<expiry ms>.<HMAC-SHA256 of both, base64url>". Stateless; rotate AUTH_SECRET to
 // sign everyone out.
@@ -20,12 +21,14 @@ export class Auth {
   readonly #secret: string;
   readonly #key: string;
   readonly #callback: string;
+  readonly #origin: string;
 
   constructor(uid: string, secret: string, key: string, publicUrl: string) {
     this.#uid = uid;
     this.#secret = secret;
     this.#key = key;
     this.#callback = `${publicUrl.replace(/\/+$/, '')}/auth/callback`;
+    this.#origin = new URL(publicUrl).origin;
   }
 
   #sign(payload: string) {
@@ -50,7 +53,7 @@ export class Auth {
   async handle(url: URL, res: ServerResponse): Promise<boolean> {
     if (url.pathname === '/auth/start') {
       const nonce = url.searchParams.get('state') ?? '';
-      const back = intraUrl(url.searchParams.get('return'));
+      const back = this.#backUrl(url.searchParams.get('return'));
       if (!NONCE.test(nonce) || !back) return text(res, 400, 'Bad login link.'), true;
       const q = new URLSearchParams({
         client_id: this.#uid,
@@ -68,7 +71,7 @@ export class Auth {
       } catch {
         state = {};
       }
-      const back = intraUrl(typeof state.back === 'string' ? state.back : null);
+      const back = this.#backUrl(typeof state.back === 'string' ? state.back : null);
       const nonce = typeof state.nonce === 'string' && NONCE.test(state.nonce) ? state.nonce : undefined;
       if (!back || !nonce) return text(res, 400, 'Bad login state.'), true;
 
@@ -87,6 +90,18 @@ export class Auth {
       return true;
     }
     return false;
+  }
+
+  /** Where a login may return to: an intra page, or our own /friends page (never an open redirect). */
+  #backUrl(s: string | null): URL | undefined {
+    const intra = intraUrl(s);
+    if (intra) return intra;
+    try {
+      const u = new URL(s ?? '');
+      return u.origin === this.#origin && u.pathname === '/friends' ? u : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Exchanges an authorization code for the user's 42 login. */

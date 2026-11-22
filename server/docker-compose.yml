@@ -34,7 +34,7 @@ services:
       retries: 3
 
   db:
-    image: postgres:latest
+    image: postgres:18
     container_name: intra-reimagined-db
     restart: unless-stopped
     environment:
