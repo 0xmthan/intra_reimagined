@@ -18,7 +18,8 @@
 //   GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login  →  { friends: [{ login, addedAt }] }: your private
 //                                     friends list (one-way: adding someone sends them nothing, and only you see it)
 //   GET /v1/me/friends/stats?week=<ms>  →  { friends: { login: { name, image, photo, seat, level, wallet,
-//                                     evalPoints, at, hours?: { week, total, at } } } }: the friends panel's stats
+//                                     evalPoints, at, hours?: { week, total, at, last? } } } }: the friends panel's stats
+//                                     (last: ms when last logged in on campus)
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //   GET /friends                      →  your friends list on the web, for phones (friends-page.ts)
 //
@@ -162,12 +163,17 @@ function logtimeHours(sessions: [number, number | null][], weekStart: number) {
   const now = Date.now();
   let total = 0;
   let week = 0;
+  // `last`: when they were last logged in at a campus computer (now if still logged in; a session 42
+  // never closed counts from its start once it's 2 days old). Absent = never.
+  let last: number | undefined;
   for (const [a, b] of sessions) {
     const end = Math.min(b ?? now, now);
     total += Math.max(0, end - a);
     week += Math.max(0, end - Math.max(a, weekStart));
+    const seen = b ?? (now - a < 2 * DAY ? now : a);
+    if (last === undefined || seen > last) last = seen;
   }
-  return { week: week / 3_600_000, total: total / 3_600_000, at: now };
+  return { week: week / 3_600_000, total: total / 3_600_000, at: now, last };
 }
 
 // Anyone with a valid token uses the extension: remember them for the badge (at most hourly per login).

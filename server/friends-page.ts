@@ -309,6 +309,18 @@ const JS = `'use strict';
     const m = Math.round(s / 60);
     return m < 60 ? 'updated ' + m + ' min ago' : 'updated ' + Math.round(m / 60) + 'h ago';
   }
+  // Like ago(), for times that can be months or years back.
+  function since(t) {
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (m < 60) return m < 1 ? 'just now' : m + 'm ago';
+    const h = Math.round(m / 60);
+    if (h < 48) return h + 'h ago';
+    const d = Math.round(h / 24);
+    if (d < 14) return d + 'd ago';
+    if (d < 60) return Math.round(d / 7) + 'w ago';
+    if (d < 365) return Math.round(d / 30.4) + 'mo ago';
+    return Math.round(d / 365) + 'y ago';
+  }
   function monday() {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime();
@@ -345,6 +357,11 @@ const JS = `'use strict';
     if (s.hours) {
       const h = el('div', 'hours');
       h.append(el('span', null, fmtH(s.hours.week) + 'h this week'), el('span', null, fmtH(s.hours.total) + 'h all time'));
+      if (!s.seat && typeof s.hours.last === 'number') {
+        const l = el('span', null, 'on campus ' + since(s.hours.last));
+        l.title = 'Last logged in on campus: ' + new Date(s.hours.last).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+        h.append(l);
+      }
       info.append(h);
     }
     a.append(pic, info);

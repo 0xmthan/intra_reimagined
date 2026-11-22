@@ -32,7 +32,8 @@ interface Light { name: string; image?: string; photo?: string; groups?: string[
 interface Heavy { wallet?: string; evalPoints?: string; at: number }
 /** `probation`: on the blackhole system, where missing the deadline blackholes you (only then is it shown). */
 interface Pace { kind: 'milestone' | 'blackhole' | 'frozen' | 'done' | 'none'; days?: number; date?: string; probation?: boolean; at: number }
-interface Hours { week: number; total: number; at: number }
+/** `last`: when they were last logged in on campus (ms). */
+interface Hours { week: number; total: number; at: number; last?: number }
 interface Stats { light?: Light; heavy?: Heavy; pace?: Pace; hours?: Hours }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -448,6 +449,19 @@ function ago(t: number) {
   return s < 45 ? 'just now' : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
 }
 
+/** Like ago(), for times that can be months or years back. */
+function since(t: number) {
+  const m = Math.max(0, Math.round((Date.now() - t) / 60_000));
+  if (m < 60) return m < 1 ? 'just now' : `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 14) return `${d}d ago`;
+  if (d < 60) return `${Math.round(d / 7)}w ago`;
+  if (d < 365) return `${Math.round(d / 30.4)}mo ago`;
+  return `${Math.round(d / 365)}y ago`;
+}
+
 function paceHtml(p?: Pace) {
   if (!p) return '<span class="v muted">…</span>';
   if (p.kind === 'done') return '<span class="v ok" title="Common core validated">✓ done</span>';
@@ -478,7 +492,7 @@ function rowHtml(login: string) {
           <span title="Evaluation points"><span class="v">${esc(s.heavy?.evalPoints ?? '…')}</span><i>Evp</i></span>
           ${s.pace?.probation ? `<span><i>Blackhole</i>${paceHtml(s.pace)}</span>` : ''}
         </span>
-        <span class="hours">${s.hours ? `<span title="Logtime since Monday">${fmtH(s.hours.week)}h this week</span><span title="All-time logtime">${fmtH(s.hours.total)}h all time</span>` : ''}</span>
+        <span class="hours">${s.hours ? `<span title="Logtime since Monday">${fmtH(s.hours.week)}h this week</span><span title="All-time logtime">${fmtH(s.hours.total)}h all time</span>${!seat && s.hours.last ? `<span title="Last logged in on campus: ${esc(new Date(s.hours.last).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }))}">on campus ${since(s.hours.last)}</span>` : ''}` : ''}</span>
       </span>
       <button class="rm" data-remove="${esc(login)}" aria-label="Remove ${esc(login)}" title="Remove from friends">${svg('close')}</button>
     </a>`;
@@ -643,7 +657,7 @@ h3 { margin: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0
 .v.warn { color: #ffb454; }
 .v.bad { color: #ff7a7a; }
 .v.frozen { color: #8ecbff; }
-.hours { display: flex; gap: 12px; margin-top: 4px; font-size: 11.5px; color: var(--faint); }
+.hours { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 11.5px; color: var(--faint); }
 .rm {
   position: absolute; top: 8px; right: 8px; display: none; place-items: center; width: 24px; height: 24px; padding: 0;
   border: 0; border-radius: 7px; background: rgba(var(--ir-glass-rgb), 0.7); color: var(--faint);
