@@ -1,7 +1,8 @@
 // /friends: your friends list on the web, for checking on them from a phone. Log in with 42 (the
 // same flow as the extension: auth.ts returns here with a token in the URL fragment), then the page
 // shows what the extension's friends panel shows (from /v1/me/friends/stats), minus milestone
-// days. The background is your banner, frozen on its first frame (GIFs don't animate), under
+// days. The + button in the header toggles edit mode: add friends by login, remove them with × (the
+// same PUT/DELETE /v1/me/friends/:login the extension uses). The background is your banner, frozen on its first frame (GIFs don't animate), under
 // frosted glass.
 //
 //   GET /friends             the page
@@ -51,9 +52,14 @@ const HTML = `<!doctype html>
     <header>
       <h2><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/></svg>Friends <span class="count" id="count"></span></h2>
       <span class="ago" id="ago"></span>
+      <button class="icon" id="edit" title="Add or remove friends" aria-label="Add or remove friends" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M19 8v6M16 11h6"/></svg></button>
       <button class="icon" id="refresh" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
       <button class="icon" id="logout" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5M15 12H4"/></svg></button>
     </header>
+    <form id="add" autocomplete="off">
+      <input id="add-login" type="text" placeholder="Add a friend by login" aria-label="Login to add" maxlength="32" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+      <button class="primary" id="add-btn" type="submit">Add</button>
+    </form>
     <p class="error" id="list-error" hidden></p>
     <div id="rows"></div>
   </section>
@@ -89,7 +95,15 @@ body {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
-@media (max-width: 520px) { .panel { margin-top: 0; } }
+/* Phones: the panel is the whole screen (the banner only shows through the glass). */
+@media (max-width: 520px) {
+  body { padding: 0; }
+  .panel {
+    width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .panel #signin { padding-top: 18vh; }
+}
 
 #signin { padding: 32px 26px 28px; text-align: center; }
 .logo svg { width: 64px; height: 64px; display: block; margin: 0 auto 18px; border-radius: 16px; }
@@ -114,8 +128,21 @@ h2 svg { color: var(--accent); }
 
 #rows { padding: 0 8px 10px; }
 .group { margin: 12px 12px 4px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
-.row { display: flex; gap: 14px; align-items: flex-start; padding: 12px; border-radius: 14px; color: inherit; text-decoration: none; }
+.row { display: flex; align-items: center; border-radius: 14px; }
 .row:hover { background: rgba(255, 255, 255, 0.04); }
+.main { flex: 1; min-width: 0; display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: inherit; text-decoration: none; }
+
+/* Edit mode (the + button): the add form and a remove button on every row. */
+#add { display: flex; gap: 8px; padding: 2px 16px 6px 20px; }
+#add input { flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.06); color: var(--text); font: inherit; font-size: 16px; }
+#add input::placeholder { color: var(--faint); }
+#add input:focus { outline: none; border-color: var(--accent); }
+#add .primary { width: auto; padding: 10px 18px; }
+#list:not(.editing) #add, #list:not(.editing) .remove { display: none; }
+#edit[aria-pressed="true"] { background: rgba(0, 186, 188, 0.16); color: var(--accent); }
+.remove { flex: none; margin-right: 6px; }
+.remove:hover { background: rgba(255, 138, 138, 0.14); color: #ff8a8a; }
+.remove:disabled { opacity: 0.4; cursor: default; }
 .pic { position: relative; flex: none; width: 52px; height: 52px; }
 .pic img, .pic span { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; display: block; background: rgba(255, 255, 255, 0.08); }
 .pic.on::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 2.5px rgba(16, 18, 24, 0.85); }
@@ -189,11 +216,64 @@ const JS = `'use strict';
   $('logout').addEventListener('click', signOut);
   $('refresh').addEventListener('click', () => load(true));
 
-  async function api(path) {
-    const res = await fetch(path, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, cache: 'no-store' });
+  async function api(path, method = 'GET') {
+    const res = await fetch(path, { method, headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, cache: 'no-store' });
     if (res.status === 401) { signOut(); throw new Error('signed out'); }
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      const e = new Error('HTTP ' + res.status);
+      e.status = res.status;
+      try { e.reason = (await res.json()).error; } catch {}
+      throw e;
+    }
     return res.json();
+  }
+
+  // ---------- adding and removing ----------
+  function setEditing(on) {
+    $('list').classList.toggle('editing', on);
+    $('edit').setAttribute('aria-pressed', String(on));
+    if (!on) showError('list-error', '');
+    if (on && matchMedia('(hover: hover)').matches) $('add-login').focus();
+  }
+  $('edit').addEventListener('click', () => setEditing(!$('list').classList.contains('editing')));
+
+  $('add').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const input = $('add-login'), btn = $('add-btn');
+    const login = input.value.trim().toLowerCase();
+    if (!login) return;
+    if (!/^[a-z0-9-]{1,32}$/.test(login)) return showError('list-error', "That doesn't look like a 42 login.");
+    if (login === me) return showError('list-error', "You can't add yourself.");
+    if (data && data.friends[login]) return showError('list-error', login + ' is already on your list.');
+    btn.disabled = true;
+    try {
+      await api('/v1/me/friends/' + encodeURIComponent(login), 'PUT');
+      input.value = '';
+      showError('list-error', '');
+      await load(true);
+    } catch (e) {
+      showError('list-error',
+        e.status === 404 ? 'No student called ' + login + '.' :
+        e.status === 409 ? (e.reason ? 'You can have ' + e.reason + '.' : 'Your list is full.') :
+        e.status === 429 ? 'Too many changes at once. Wait a minute and try again.' :
+        e.reason || "Couldn't add " + login + '. Try again.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function remove(login, btn) {
+    btn.disabled = true;
+    try {
+      await api('/v1/me/friends/' + encodeURIComponent(login), 'DELETE');
+      if (data) { delete data.friends[login]; store.set(CACHE, JSON.stringify(data)); }
+      showError('list-error', '');
+      render();
+      if (busy) again = true; // a refresh already in flight may still list them
+    } catch (e) {
+      btn.disabled = false;
+      showError('list-error', e.status === 429 ? 'Too many changes at once. Wait a minute and try again.' : "Couldn't remove " + login + '. Try again.');
+    }
   }
 
   // ---------- background: the banner's first frame ----------
@@ -236,8 +316,14 @@ const JS = `'use strict';
   // Photos come through our server (42's CDN refuses visitors without a 42 session): see /photo.
   const safeImg = (u) => typeof u === 'string' && u.startsWith('/photo?') ? u : null;
 
+  const X = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   function row(login, s) {
-    const a = el('a', 'row');
+    const r = el('div', 'row');
+    const x = el('button', 'icon remove');
+    x.type = 'button'; x.title = 'Remove ' + login; x.setAttribute('aria-label', 'Remove ' + login);
+    x.innerHTML = X;
+    x.addEventListener('click', () => remove(login, x));
+    const a = el('a', 'main');
     a.href = 'https://profile.intra.42.fr/users/' + encodeURIComponent(login);
     a.target = '_blank'; a.rel = 'noopener';
     const pic = el('div', 'pic' + (s.seat ? ' on' : ''));
@@ -262,7 +348,8 @@ const JS = `'use strict';
       info.append(h);
     }
     a.append(pic, info);
-    return a;
+    r.append(a, x);
+    return r;
   }
 
   let data = null;
@@ -274,7 +361,8 @@ const JS = `'use strict';
     $('count').textContent = String(logins.length);
     $('ago').textContent = ago(data.at);
     if (!logins.length) {
-      rows.append(el('p', 'empty', 'No friends yet. Add some from the friends panel in the Intra Reimagined extension.'));
+      rows.append(el('p', 'empty', 'No friends yet. Add one by login above.'));
+      if (!$('list').classList.contains('editing')) setEditing(true);
       return;
     }
     const f = data.friends;
@@ -288,10 +376,15 @@ const JS = `'use strict';
   try { data = JSON.parse(store.get(CACHE) || 'null'); } catch {}
   render();
 
-  let busy = false;
+  // A load asked for mid-load (after adding or removing someone) runs again once that one is done,
+  // so the list never ends up on a response from before the change.
+  let busy = null, again = false;
   async function load(manual) {
-    if (busy) return;
-    busy = true;
+    if (busy) { if (manual) again = true; return busy; }
+    busy = loadOnce(manual).finally(() => { busy = null; if (again) { again = false; return load(true); } });
+    return busy;
+  }
+  async function loadOnce(manual) {
     $('refresh').classList.add('spin');
     try {
       const j = await api('/v1/me/friends/stats?photos=proxy&week=' + monday());
@@ -302,7 +395,6 @@ const JS = `'use strict';
     } catch (e) {
       if (manual || !data) showError('list-error', "Couldn't load your friends. Tap ↻ to try again.");
     } finally {
-      busy = false;
       $('refresh').classList.remove('spin');
     }
   }
