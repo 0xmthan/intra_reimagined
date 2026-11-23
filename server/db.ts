@@ -39,6 +39,8 @@ export interface EvalStats {
   outstanding: number;
   /** login → how many (filled-in) evaluations this student did of them. */
   partners: Record<string, number>;
+  /** login → those evaluations: [project id, filled in at (ms)]. Absent on rows saved before it was kept. */
+  partnerEvals?: Record<string, [number, number][]> | null;
   refreshedAt: Date;
 }
 
@@ -102,6 +104,9 @@ export class Db {
         refreshed_at timestamptz not null default now()
       )`;
     await this.#sql`alter table eval_stats add column if not exists partners jsonb`;
+    await this.#sql`alter table eval_stats add column if not exists partner_evals jsonb`;
+    // 42 project names by id (evals.ts): they never change, so each is asked of 42 once.
+    await this.#sql`create table if not exists project_names (id integer primary key, name text not null)`;
     // One custom banner per student (banners.ts); served publicly by its content hash.
     await this.#sql`
       create table if not exists banners (
@@ -356,16 +361,29 @@ export class Db {
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {
     const [row] = await this.#sql<EvalStats[]>`
-      select login, total, failed, outstanding, partners, refreshed_at as "refreshedAt" from eval_stats where login = ${login}`;
+      select login, total, failed, outstanding, partners, partner_evals as "partnerEvals", refreshed_at as "refreshedAt"
+      from eval_stats where login = ${login}`;
     return row;
   }
 
   async saveEvalStats(s: Omit<EvalStats, 'refreshedAt'>) {
     await this.#sql`
-      insert into eval_stats (login, total, failed, outstanding, partners)
-      values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding}, ${this.#sql.json(s.partners)})
+      insert into eval_stats (login, total, failed, outstanding, partners, partner_evals)
+      values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding}, ${this.#sql.json(s.partners)}, ${this.#sql.json(s.partnerEvals ?? {})})
       on conflict (login) do update set total = excluded.total, failed = excluded.failed,
-        outstanding = excluded.outstanding, partners = excluded.partners, refreshed_at = now()`;
+        outstanding = excluded.outstanding, partners = excluded.partners, partner_evals = excluded.partner_evals, refreshed_at = now()`;
+  }
+
+  async getProjectNames(ids: number[]): Promise<Map<number, string>> {
+    if (!ids.length) return new Map();
+    const rows = await this.#sql<{ id: number; name: string }[]>`select id, name from project_names where id = any(${ids})`;
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
+  async saveProjectNames(names: Map<number, string>) {
+    if (!names.size) return;
+    const rows = [...names].map(([id, name]) => ({ id, name }));
+    await this.#sql`insert into project_names ${this.#sql(rows, 'id', 'name')} on conflict (id) do update set name = excluded.name`;
   }
 
   async getPiscine(login: string): Promise<Piscine | undefined> {

@@ -356,7 +356,10 @@ function togetherHtml(login: string, t?: EvalStats['together']) {
   const times = (k: number) => (k === 1 ? 'once' : k === 2 ? 'twice' : `${k} times`);
   const you = t.youEvaluatedThem ? `You evaluated them ${times(t.youEvaluatedThem)}` : 'You never evaluated them';
   const they = t.theyEvaluatedYou ? `they evaluated you ${times(t.theyEvaluatedYou)}` : 'they never evaluated you';
-  const tip = `${you} · ${they}`;
+  // Then each evaluation on a line of its own, newest first: the project, who evaluated whom, when.
+  const when = (at: number) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const lines = t.evals.map((e) => `${e.project} · ${e.you ? 'you evaluated them' : 'they evaluated you'} · ${when(e.at)}`);
+  const tip = esc([`${you} · ${they}`, ...lines].join('\n'));
   return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
 }
 
@@ -515,7 +518,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : ccDone && daysLeft === undefined ? (alumniAt !== undefined ? 'Alumnization' : 'Common core') : 'Next deadline'}</h3>
           ${missed ? `
             <div class="big" data-tip="${-daysLeft!} days">${spanHtml(Date.now() + daysLeft! * DAY_MS, Date.now())}<small> ago</small></div>
-            <div class="sub">Missed ${pace ? `Milestone ${pace.milestone}` : 'deadline'} · ${esc(goals?.next_milestone ?? '')}</div>
+            <div class="sub">Missed ${pace ? `Milestone ${pace.milestone}` : 'deadline'}${blackhole ? '<br>' : ' · '}${esc(goals?.next_milestone ?? '')}</div>
           ` : frozen ? `
             <div class="big">${goals!.agu}<small> day${goals!.agu === 1 ? '' : 's'} left</small></div>
             <div class="sub">Ends ${esc(goals!.agu_date ?? '')}${goals?.next_milestone ? ` · next milestone ${esc(goals.next_milestone)}` : ''}</div>
@@ -559,7 +562,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
 }
 
 function bind(hero: HTMLElement, d: HeroData) {
-  for (const el of hero.querySelectorAll<HTMLElement>('[data-tip]')) addTooltip(el, el.dataset.tip!, { placement: 'bottom', style: 'v3' });
+  for (const el of hero.querySelectorAll<HTMLElement>('[data-tip]')) addTooltip(el, el.dataset.tip!.split('\n'), { placement: 'bottom', style: 'v3' });
   bindPaceTooltips(hero);
 
   // Native title picker (a transparent <select> over the title text).

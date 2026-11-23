@@ -739,7 +739,12 @@ export interface EvalStats {
   failed: number;
   outstanding: number;
   /** On someone else's profile: evaluations between you and them, each way. */
-  together?: { youEvaluatedThem: number; theyEvaluatedYou: number };
+  together?: {
+    youEvaluatedThem: number;
+    theyEvaluatedYou: number;
+    /** Each one, newest first: the project, when (ms), and whether you were the evaluator. */
+    evals: { project: string; at: number; you: boolean }[];
+  };
 }
 
 /** What this student did as an evaluator (and, with `viewer`, how often you two met), via our server. */
@@ -748,7 +753,14 @@ export async function fetchEvalStats(login: string, viewer?: string): Promise<Ev
   const q = viewer && viewer !== login ? `?with=${encodeURIComponent(viewer)}` : '';
   const j = await irGet<EvalStats>(`/v1/users/${encodeURIComponent(login)}/evaluations${q}`);
   if (j === 'auth') return j;
-  return j && typeof j.total === 'number'
-    ? { total: j.total, failed: j.failed, outstanding: j.outstanding, together: j.together }
-    : undefined;
+  if (!j || typeof j.total !== 'number') return undefined;
+  const t = j.together;
+  const together = t && {
+    youEvaluatedThem: t.youEvaluatedThem,
+    theyEvaluatedYou: t.theyEvaluatedYou,
+    evals: (Array.isArray(t.evals) ? t.evals : []).filter(
+      (e) => !!e && typeof e.project === 'string' && Number.isFinite(e.at) && typeof e.you === 'boolean',
+    ),
+  };
+  return { total: j.total, failed: j.failed, outstanding: j.outstanding, together };
 }

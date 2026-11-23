@@ -3,7 +3,7 @@
 //
 //   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
 //   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
-//                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou } }
+//                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou, evals: [{ project, at, you }] } }
 //   GET /v1/users/:login/logtime      →  { login, sessions: [[startMs, endMs|null], …], syncedAt }: all-time logtime (logtime.ts)
 //   GET /v1/users/:login/events       →  { campusId, events: [{ id, name, kind, location, begin, end, subscribers, max }] }: every event at their campus (events.ts)
 //   GET /v1/events/:id/users          →  { id, users: [{ login, name, image }] }: who's subscribed to an event
@@ -552,7 +552,7 @@ const server = createServer(async (req, res) => {
       // Let the browser cache it too: a piscine date doesn't change.
       return send(res, 200, piscine, { 'Cache-Control': 'private, max-age=86400' });
     }
-    const { partners: _, ...stats } = await evals.get(login); // the partner table stays on the server
+    const { partners: _, partnerEvals: __, ...stats } = await evals.get(login); // the partner tables stay on the server
     const viewer = url.searchParams.get('with')?.toLowerCase();
     const together = viewer && viewer !== login && /^[a-z0-9-]{1,32}$/.test(viewer) ? await evals.together(login, viewer) : undefined;
     send(res, 200, { ...stats, together }, { 'Cache-Control': 'private, max-age=600' });
