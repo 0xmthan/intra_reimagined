@@ -2,8 +2,11 @@
 // opens the event popup), restyled in styles.css (.ir-agenda), plus:
 //   - headers grouping the events: This week, Next week, Later in November, December, ...
 //   - short months ("Nov") and the event's kind as a tag in front of its title
-//   - the whole row opens the event (intra's "See more")
+//   - the whole row (or "See more") opens the event in the same panel as the Logtime calendar's,
+//     with who's subscribed (profile/logtime-events.ts)
 // Re-applied whenever intra swaps the list (filters).
+import { openEventPanel } from './logtime-events';
+
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 const DAY = 86_400_000;
 
@@ -57,21 +60,25 @@ function enhance(list: HTMLElement) {
       kind.textContent = kind.textContent?.trim() ?? '';
     }
     const more = item.querySelector<HTMLElement>('.event-button:not(.copy)');
-    if (more) {
-      // It's a link to "#": without this the page jumps to the top (intra's popup still opens).
-      more.addEventListener('click', (e) => e.preventDefault());
+    const id = Number(more?.dataset.url?.match(/^\/events\/(\d+)$/)?.[1]);
+    if (more && id) {
+      // The same panel as the Logtime calendar's (with who's subscribed, and feedback once it's
+      // over). Caught on the way down, so intra's own handler on "See more" never runs.
+      const open = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void openEventPanel(id);
+      };
+      item.addEventListener('click', (e) => {
+        const t = e.target as Element;
+        if (t.closest('.copy') || (t.closest('a') && !more.contains(t))) return; // "copy link", or another link inside
+        open(e);
+      }, { capture: true });
       item.classList.add('ir-agenda-link');
       item.tabIndex = 0;
       item.setAttribute('role', 'button');
-      item.addEventListener('click', (e) => {
-        if ((e.target as Element).closest('a, .copy')) return; // the link inside, or "copy link"
-        more.click();
-      });
       item.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          more.click();
-        }
+        if (e.target === item && (e.key === 'Enter' || e.key === ' ')) open(e);
       });
     }
   }

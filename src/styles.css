@@ -1238,6 +1238,9 @@ html body .row.ir-home-grid > [data-ir-card] > .container-inner-item.boxed { bac
 }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer::before,
 #smartModal:is(.event-modal, .exam-modal) .modal-footer::after { display: none; }
+/* Your own feedback, which intra squeezes into the footer beside the buttons (stretching them to
+   its height): hidden. Opened from the Logtime calendar, it's first in the Feedback list instead. */
+#smartModal:is(.event-modal, .exam-modal) .modal-footer .feedback-comment-item { display: none; }
 #smartModal:is(.event-modal, .exam-modal) .modal-footer .btn {
   margin: 0 !important;
   padding: 8px 18px !important;
@@ -2012,4 +2015,51 @@ html[data-ir-mode='light'].ir-hero-on .container-item.profile-item {
    on white; the stripes and fills keep the bright --accent. */
 html[data-ir-mode='light'] :is(.ir-agenda .event-item, #smartModal) {
   --accent-ink: color-mix(in srgb, var(--accent) 62%, #000);
+}
+
+/* Who's subscribed, added under an event's description when it's opened from the Logtime calendar
+   (profile/logtime-events.ts): photo and login, each linking to the profile. */
+#smartModal .ir-event-subs { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(var(--ir-ink), 0.07); }
+#smartModal .ir-event-subs-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+#smartModal .ir-event-subs-head b { font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11.5px; color: var(--accent-ink, var(--accent, var(--ir-accent))); }
+#smartModal .ir-event-subs-head span { color: var(--ir-muted); }
+#smartModal .ir-event-subs-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 10px 6px;
+  max-height: 232px; overflow-y: auto; padding: 2px; scrollbar-width: thin;
+}
+#smartModal .ir-event-sub { display: grid; justify-items: center; gap: 4px; min-width: 0; text-decoration: none !important; color: var(--ir-muted) !important; }
+#smartModal a.ir-event-sub:hover { color: var(--ir-text) !important; }
+#smartModal .ir-event-sub-face {
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: rgba(var(--ir-ink), 0.08); font-size: 12px; text-transform: uppercase; transition: transform 0.12s, box-shadow 0.12s;
+}
+#smartModal a.ir-event-sub:hover .ir-event-sub-face { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--accent, var(--ir-accent)); }
+#smartModal .ir-event-sub-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#smartModal .ir-event-sub-login { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 1.2; }
+#smartModal .ir-event-subs-grid.loading .ir-event-sub { width: 40px; height: 40px; border-radius: 50%; justify-self: center; background: rgba(var(--ir-ink), 0.08); animation: ir-subs-pulse 1s ease-in-out infinite alternate; }
+@keyframes ir-subs-pulse { to { opacity: 0.4; } }
+#smartModal .ir-event-subs-none { grid-column: 1 / -1; font-size: 13px; color: var(--ir-muted); }
+
+/* Everyone's feedback on a past event, under its subscribers (profile/logtime-events.ts). */
+#smartModal .ir-event-fb { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(var(--ir-ink), 0.07); }
+#smartModal .ir-event-fb-list { display: grid; gap: 10px; }
+#smartModal .ir-event-fb-item {
+  padding: 12px 14px; border-radius: 12px; background: rgba(var(--ir-ink), 0.04); border: 1px solid rgba(var(--ir-ink), 0.06);
+}
+#smartModal .ir-event-fb-list.loading .ir-event-fb-item { height: 74px; animation: ir-subs-pulse 1s ease-in-out infinite alternate; }
+#smartModal .ir-event-fb-top { display: flex; align-items: center; gap: 10px; }
+#smartModal .ir-event-fb-who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; text-decoration: none !important; color: var(--ir-text) !important; }
+#smartModal .ir-event-fb-who .ir-event-sub-face { width: 28px; height: 28px; flex: none; font-size: 10px; }
+#smartModal .ir-event-fb-who b { font-size: 13.5px; font-weight: 600; }
+#smartModal a.ir-event-fb-who:hover b { color: var(--accent-ink, var(--accent, var(--ir-accent))) !important; }
+#smartModal .ir-event-fb-stars { color: #f5c451; font-size: 13px; letter-spacing: 1px; }
+#smartModal .ir-event-fb-top time { margin-left: auto; font-size: 12px; color: var(--ir-muted); white-space: nowrap; }
+#smartModal .ir-event-fb-crit { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 0 36px; font-size: 11.5px; color: var(--ir-muted); }
+#smartModal .ir-event-fb-crit b { font-weight: 600; color: var(--ir-text); }
+#smartModal .ir-event-fb-crit .low b { color: #ff7a7a; }
+#smartModal .ir-event-fb-comment { margin: 8px 0 0 36px !important; white-space: pre-line; overflow-wrap: anywhere; font-size: 14px; line-height: 1.55; color: var(--ir-text) !important; }
+#smartModal .ir-event-fb-item.mine { border-color: color-mix(in srgb, var(--accent, var(--ir-accent)) 45%, transparent); background: color-mix(in srgb, var(--accent, var(--ir-accent)) 7%, transparent); }
+#smartModal .ir-event-fb-you {
+  padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--accent, var(--ir-accent)) 22%, transparent); color: var(--accent-ink, var(--accent, var(--ir-accent)));
 }

@@ -341,6 +341,106 @@ export async function fetchLogtimeSessions(login: string): Promise<[number, numb
   return j.sessions.filter(ok);
 }
 
+// ---------- campus events (server: /v1/users/:login/events) ----------
+
+export interface CampusEvent {
+  id: number;
+  name: string;
+  kind: string;
+  location: string;
+  begin: number; // ms
+  end: number | null;
+  subscribers: number;
+  max: number | null; // null = no limit
+}
+
+/** Every event at `login`'s campus, oldest first; undefined = unknown (no server, signed out). */
+export async function fetchCampusEvents(login: string): Promise<CampusEvent[] | undefined> {
+  if (!IR_API) return undefined;
+  const j = await irGet<{ events: unknown }>(`/v1/users/${encodeURIComponent(login)}/events`);
+  if (!j || j === 'auth' || !Array.isArray(j.events)) return undefined;
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  return j.events
+    .filter((e): e is Record<string, unknown> => !!e && Number.isInteger(e.id) && Number.isFinite(e.begin))
+    .map((e) => ({
+      id: e.id as number,
+      name: str(e.name),
+      kind: str(e.kind),
+      location: str(e.location),
+      begin: e.begin as number,
+      end: Number.isFinite(e.end) ? (e.end as number) : null,
+      subscribers: Number.isInteger(e.subscribers) ? (e.subscribers as number) : 0,
+      max: Number.isInteger(e.max) && (e.max as number) > 0 ? (e.max as number) : null,
+    }));
+}
+
+export interface EventUser {
+  login: string;
+  name: string;
+  image?: string;
+}
+const eventUsers = new Map<number, Promise<EventUser[] | undefined>>();
+
+/** Who's subscribed to an event (once per page load; a failed fetch is tried again next time). */
+export function fetchEventUsers(id: number): Promise<EventUser[] | undefined> {
+  let p = eventUsers.get(id);
+  if (!p) {
+    p = (async () => {
+      if (!IR_API) return undefined;
+      const j = await irGet<{ users: unknown }>(`/v1/events/${id}/users`);
+      if (!j || j === 'auth' || !Array.isArray(j.users)) return undefined;
+      return j.users
+        .filter((u): u is Record<string, unknown> => !!u && typeof u.login === 'string' && LOGIN_RE.test(u.login))
+        .map((u) => ({
+          login: u.login as string,
+          name: typeof u.name === 'string' ? u.name : (u.login as string),
+          image: typeof u.image === 'string' && CDN_IMAGE.test(u.image) ? u.image : undefined,
+        }));
+    })();
+    p.then((v) => v || eventUsers.delete(id));
+    eventUsers.set(id, p);
+  }
+  return p;
+}
+
+export interface EventFeedback {
+  login: string;
+  rating: number; // 0–5
+  comment: string;
+  at: number;
+  details: Record<string, number>; // interesting, pertinent, quality, accuracy → 0–4
+}
+const eventFeedbacks = new Map<number, Promise<EventFeedback[] | undefined>>();
+
+/** Everyone's feedback on an event, oldest first (once per page load; failures are tried again). */
+export function fetchEventFeedbacks(id: number): Promise<EventFeedback[] | undefined> {
+  let p = eventFeedbacks.get(id);
+  if (!p) {
+    p = (async () => {
+      if (!IR_API) return undefined;
+      const j = await irGet<{ feedbacks: unknown }>(`/v1/events/${id}/feedbacks`);
+      if (!j || j === 'auth' || !Array.isArray(j.feedbacks)) return undefined;
+      const num = (v: unknown, max: number) => (Number.isFinite(v) ? Math.min(max, Math.max(0, v as number)) : 0);
+      return j.feedbacks
+        .filter((f): f is Record<string, unknown> => !!f && typeof f.login === 'string' && LOGIN_RE.test(f.login))
+        .map((f) => ({
+          login: f.login as string,
+          rating: num(f.rating, 5),
+          comment: typeof f.comment === 'string' ? f.comment : '',
+          at: num(f.at, Number.MAX_SAFE_INTEGER),
+          details: Object.fromEntries(
+            Object.entries(f.details && typeof f.details === 'object' ? f.details : {})
+              .filter(([k]) => /^[a-z_]{1,32}$/.test(k))
+              .map(([k, v]) => [k, num(v, 4)]),
+          ),
+        }));
+    })();
+    p.then((v) => v || eventFeedbacks.delete(id));
+    eventFeedbacks.set(id, p);
+  }
+  return p;
+}
+
 // ---------- friends (server: GET /v1/me/friends, PUT|DELETE /v1/me/friends/:login) ----------
 
 const LOGIN_RE = /^[a-z0-9-]{1,32}$/;

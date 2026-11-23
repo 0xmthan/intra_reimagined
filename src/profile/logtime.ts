@@ -5,10 +5,12 @@
 // back through the whole history) or Calendar (every month as a calendar with its dates, side by side,
 // newest on the right, scrolling back the same way).
 // Data: every session from our server (all time, server/logtime.ts), split into local days; without
-// it, intra's locations_stats (only the last ~4 months). Built with DOM APIs in a shadow root
+// it, intra's locations_stats (only the last ~4 months). The calendar also marks days with campus
+// events (logtime-events.ts). Built with DOM APIs in a shadow root
 // inside the card; intra's own calendar is hidden.
 import { myLogin } from '../me';
-import { fetchLogtimeSessions } from './data';
+import { fetchCampusEvents, fetchLogtimeSessions } from './data';
+import { attachEvents, markEvents, setCardEvents } from './logtime-events';
 
 const HOST = 'ir-logtime';
 const DAY = 86_400_000;
@@ -206,6 +208,13 @@ export async function reworkLogtime(
   ),
 ) {
   if (!login || !card || card.querySelector(HOST)) return;
+  // Campus events for the calendar's dots: whenever they arrive, marked in place (no redraw).
+  fetchCampusEvents(login).then((events) => {
+    if (!events) return;
+    setCardEvents(card, events);
+    const root = card.querySelector(HOST)?.shadowRoot;
+    if (root) markEvents(card, root);
+  });
   // All time from our server when it answers quickly; otherwise intra's last four months first,
   // swapped for the whole history once it arrives (a first sync of a long history takes a while).
   const all = fetchAllDays(login);
@@ -321,6 +330,8 @@ function draw(card: HTMLElement) {
     lower.append(heat);
   }
   root.replaceChildren(style, tiles, lower);
+  attachEvents(card, root);
+  markEvents(card, root);
 
   // Intra's calendar stays in the page (its script owns it), just not shown.
   for (const c of card.children) if (c.tagName !== 'H4' && c !== host) (c as HTMLElement).hidden = true;
@@ -374,6 +385,7 @@ function monthCalendar(days: Day[], month: Date, total: { hours: number; active:
   for (let dd = 1; dd <= n; dd++) {
     const date = new Date(month.getFullYear(), month.getMonth(), dd);
     const cell = el('span', 'day', String(dd));
+    cell.dataset.iso = iso(date);
     if (date > today || date < days[0].date) cell.classList.add('out');
     else {
       const h = byIso.get(iso(date)) ?? 0;
@@ -456,7 +468,7 @@ const CSS = `
 .cal-grid { display: grid; grid-template-columns: repeat(7, 20px); grid-template-rows: 13px; grid-auto-rows: 20px; gap: 2px; }
 .cal-grid .wd { font-size: 10px; line-height: 13px; text-align: center; color: var(--faint); }
 .day {
-  border-radius: 5px; font-size: 10px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums;
+  position: relative; border-radius: 5px; font-size: 10px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums;
   color: rgba(var(--ir-ink-text), 0.72); background: rgba(var(--ir-ink), 0.05);
 }
 .day.blank { background: transparent; }
@@ -467,6 +479,13 @@ const CSS = `
 .day[data-l='3'] { background: rgba(var(--ir-accent-rgb), 0.6); color: #fff; }
 .day[data-l='4'] { background: rgba(var(--ir-accent-rgb), 0.8); color: #062326; font-weight: 600; }
 .day[data-l='5'] { background: var(--ir-accent-hi); color: #062326; font-weight: 600; }
+
+/* Days with campus events: a dot per event (up to three) under the date, coloured by kind. */
+.day.has-ev { cursor: pointer; }
+.day.has-ev:hover { outline: 1.5px solid var(--ir-accent-hi); outline-offset: 1px; }
+.day .dots { position: absolute; left: 0; right: 0; bottom: 1.5px; display: flex; justify-content: center; gap: 1.5px; pointer-events: none; }
+.day .dots b { width: 4px; height: 4px; border-radius: 50%; background: var(--k); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.day.has-ev { line-height: 17px; }
 
 /* Phones: tiles in two rows of three; the heatmap above the weekly bars. */
 @media (max-width: 768px) {
