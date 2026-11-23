@@ -1511,6 +1511,8 @@ html.ir-dark .main-left-navbar > ._ > li > a::before {
   z-index: -1;
 }
 html.ir-dark .main-left-navbar > ._ > li > a > :not(.visible-overlay) { position: relative; z-index: 1; }
+/* intra's icon font draws its glyphs ~4px (at 25px) above the middle of their line box: back onto the tile's center. */
+html.ir-dark .main-left-navbar > ._ > li > a > span[class^='icon-'] { transform: translateY(0.16em); }
 html.ir-dark .main-left-navbar > ._ > li > a:hover { color: #fff !important; text-decoration: none; }
 html.ir-dark .main-left-navbar > ._ > li > a:hover::before { background: rgba(var(--ir-ink), 0.07); }
 /* The page you're on: teal icon on a teal-tinted tile, with a small bar at the edge. */
