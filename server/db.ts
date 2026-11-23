@@ -21,6 +21,8 @@ export interface PiscineStudent {
   cursusLevel: number | null;
   /** 42cursus blackhole date (ISO); in the past = blackholed. */
   blackholedAt: string | null;
+  /** When 42 ended their 42cursus (ISO); in the past = blackholed, even when blackholedAt was never updated. */
+  cursusEndAt: string | null;
 }
 
 export interface PiscineList {

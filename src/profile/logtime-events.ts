@@ -1,7 +1,8 @@
-// Campus events on the Logtime card's Calendar view: a dot (coloured by kind) on each day with
-// events; hovering (or tapping) the day shows a tooltip listing them, and clicking one opens
-// intra's own event panel (#smartModal), like the Agenda's "See more". The tooltip previews who's
-// subscribed (a few photos and the count); "+N" or the row opens the panel, which lists everyone.
+// Campus events on the Logtime card's Calendar view: one dot on each day with events. Hovering the
+// day says how many (and to click); clicking (or tapping) it opens the day's list, which stays until
+// a click elsewhere. Each event in it opens intra's own event panel (#smartModal), like the Agenda's
+// "See more". The list previews who's subscribed (a few photos and the count); "+N" or the row
+// opens the panel, which lists everyone.
 // The tooltip lives in its own shadow root on <body>, so the card's overflow never clips it.
 import { myLogin } from '../me';
 import { fetchEventFeedbacks, fetchEventUsers, type CampusEvent } from './data';
@@ -42,7 +43,7 @@ export function setCardEvents(card: HTMLElement, events: CampusEvent[]) {
   byCard.set(card, days);
 }
 
-/** Dots on the calendar's days that have events (safe to call again: it redoes them). */
+/** A dot on the calendar's days that have events (safe to call again: it redoes them). */
 export function markEvents(card: HTMLElement, root: ShadowRoot) {
   const days = byCard.get(card);
   if (!days) return;
@@ -57,11 +58,7 @@ export function markEvents(card: HTMLElement, root: ShadowRoot) {
     cell.setAttribute('aria-label', `${list.length} event${list.length === 1 ? '' : 's'}`);
     const dots = document.createElement('i');
     dots.className = 'dots';
-    for (const e of list.slice(0, 3)) {
-      const b = document.createElement('b');
-      b.style.setProperty('--k', kindColor(e.kind));
-      dots.append(b);
-    }
+    dots.append(document.createElement('b'));
     cell.append(dots);
   }
 }
@@ -73,32 +70,21 @@ export function attachEvents(card: HTMLElement, root: ShadowRoot) {
   if (wired.has(root)) return;
   wired.add(root);
   const dayOf = (t: EventTarget | null) => (t instanceof Element ? t.closest<HTMLElement>('.day.has-ev') : null);
+  // Hover: just the count, and that a click shows them. An open list stays put meanwhile.
   root.addEventListener('pointerover', (e) => {
     const cell = dayOf(e.target);
-    if (!cell || (e as PointerEvent).pointerType !== 'mouse') return;
-    clearTimeout(switchTimer);
-    // Already showing another day's: wait a moment before switching, since the way from a day up
-    // into its tooltip crosses the day above it.
-    if (tip && !tip.hidden && anchor && anchor !== cell) switchTimer = window.setTimeout(() => show(card, cell, false), 150);
-    else show(card, cell, false);
+    if (!cell || (e as PointerEvent).pointerType !== 'mouse' || pinned) return;
+    show(card, cell, false);
   });
   root.addEventListener('pointerout', (e) => {
     const cell = dayOf(e.target);
-    if (cell && !cell.contains((e as PointerEvent).relatedTarget as Node | null)) {
-      clearTimeout(switchTimer);
-      hideSoon();
-    }
+    if (cell && !cell.contains((e as PointerEvent).relatedTarget as Node | null)) hideSoon();
   });
-  // Click / tap: a day whose tooltip is already up (hovered, or tapped once on a phone) with a
-  // single event opens it; otherwise the tooltip shows and stays pinned until a click elsewhere.
+  // Click / tap: the day's events, listed until a click elsewhere (or on the same day again).
   root.addEventListener('click', (e) => {
     const cell = dayOf(e.target);
     if (!cell) return;
-    const list = byCard.get(card)?.get(cell.dataset.iso!);
-    if (list?.length === 1 && anchor === cell && tip && !tip.hidden) {
-      hide();
-      return openEventPanel(list[0].id);
-    }
+    if (pinned && anchor === cell) return hide();
     show(card, cell, true);
   });
 }
@@ -108,8 +94,7 @@ export function attachEvents(card: HTMLElement, root: ShadowRoot) {
 let tipHost: HTMLElement | undefined;
 let tip: HTMLElement | undefined;
 let hideTimer: number | undefined;
-let switchTimer: number | undefined;
-let pinned = false;
+let pinned = false; // the list is open (clicked), not just the hover hint
 let anchor: HTMLElement | undefined;
 
 function ensureTip() {
@@ -122,10 +107,7 @@ function ensureTip() {
   tip.className = 'tip';
   tip.setAttribute('role', 'tooltip');
   tip.hidden = true;
-  tip.addEventListener('pointerenter', () => {
-    clearTimeout(hideTimer);
-    clearTimeout(switchTimer);
-  });
+  tip.addEventListener('pointerenter', () => clearTimeout(hideTimer));
   tip.addEventListener('pointerleave', () => !pinned && hideSoon());
   root.append(style, tip);
   document.body.append(tipHost);
@@ -141,7 +123,6 @@ function ensureTip() {
 
 function hide() {
   clearTimeout(hideTimer);
-  clearTimeout(switchTimer);
   pinned = false;
   anchor = undefined;
   if (tip) tip.hidden = true;
@@ -169,16 +150,14 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 }
 
-function show(card: HTMLElement, cell: HTMLElement, pin: boolean) {
-  const list = byCard.get(card)?.get(cell.dataset.iso!);
-  if (!list) return;
+/** The hover hint (`list` false: date, hours and how many events) or the day's list (`list` true). */
+function show(card: HTMLElement, cell: HTMLElement, list: boolean) {
+  const events = byCard.get(card)?.get(cell.dataset.iso!);
+  if (!events) return;
   const t = ensureTip();
   clearTimeout(hideTimer);
-  if (anchor === cell && !t.hidden) {
-    pinned ||= pin;
-    return;
-  }
-  pinned = pin;
+  if (anchor === cell && !t.hidden && pinned === list) return;
+  pinned = list;
   anchor = cell;
 
   const [y, m, d] = cell.dataset.iso!.split('-').map(Number);
@@ -186,8 +165,17 @@ function show(card: HTMLElement, cell: HTMLElement, pin: boolean) {
   const head = el('div', 'head');
   head.append(el('b', '', date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })));
   if (cell.dataset.hours) head.append(el('span', '', cell.dataset.hours));
+  t.classList.toggle('hint', !list);
+  if (!list) {
+    const n = events.length;
+    const line = el('div', 'hint-line');
+    line.append(el('b', '', `${n} event${n === 1 ? '' : 's'}`), el('span', '', ' · Click to see them'));
+    t.replaceChildren(head, line);
+    t.hidden = false;
+    return place(t, cell);
+  }
 
-  const items = list.map((e) => {
+  const items = events.map((e) => {
     // Not a link: the photos inside it are.
     const row = el('div', 'ev');
     row.tabIndex = 0;
@@ -453,6 +441,11 @@ const TIP_CSS = `
   animation: pop 0.12s ease-out;
 }
 .tip[hidden] { display: none; }
+/* The hover hint: small, just the date, hours and count. */
+.tip.hint { min-width: 0; padding: 8px 10px; pointer-events: none; }
+.tip.hint .head { padding: 0 0 3px; }
+.hint-line { font-size: 12px; white-space: nowrap; }
+.hint-line span { color: var(--ir-muted, #a1a7b5); }
 .tip::after {
   content: ''; position: absolute; top: 100%; left: var(--arrow); width: 10px; height: 10px; margin: -5px 0 0 -5px;
   background: inherit; border: inherit; border-width: 0 1px 1px 0; transform: rotate(45deg);

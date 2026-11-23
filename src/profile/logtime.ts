@@ -480,11 +480,11 @@ const CSS = `
 .day[data-l='4'] { background: rgba(var(--ir-accent-rgb), 0.8); color: #062326; font-weight: 600; }
 .day[data-l='5'] { background: var(--ir-accent-hi); color: #062326; font-weight: 600; }
 
-/* Days with campus events: a dot per event (up to three) under the date, coloured by kind. */
+/* Days with campus events: one dot under the date (hover for the count, click for the list). */
 .day.has-ev { cursor: pointer; }
 .day.has-ev:hover { outline: 1.5px solid var(--ir-accent-hi); outline-offset: 1px; }
 .day .dots { position: absolute; left: 0; right: 0; bottom: 1.5px; display: flex; justify-content: center; gap: 1.5px; pointer-events: none; }
-.day .dots b { width: 4px; height: 4px; border-radius: 50%; background: var(--k); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.day .dots b { width: 4px; height: 4px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
 .day.has-ev { line-height: 17px; }
 
 /* Phones: tiles in two rows of three; the heatmap above the weekly bars. */

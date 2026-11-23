@@ -701,6 +701,8 @@ export interface PiscineStudent {
   cursusLevel?: number | null;
   /** 42cursus blackhole date (ISO); in the past = blackholed. */
   blackholedAt?: string | null;
+  /** When 42 ended their 42cursus (ISO); in the past = blackholed too (pace system: blackholedAt can stay in the future). */
+  cursusEndAt?: string | null;
 }
 
 /** Everyone from one piscine (same campus, month and year), via our server. */

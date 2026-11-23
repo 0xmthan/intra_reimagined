@@ -20,12 +20,15 @@ function close() {
 }
 
 // 42's "active?" is false while an account is frozen (and for everyone who left), so combine it
-// with the 42cursus row: in 42cursus + blackhole ahead = cadet (frozen if inactive).
+// with the 42cursus row: blackholed once its blackhole date or its end date has passed (a pace
+// blackhole ends the cursus but can leave blackhole_at in the future); otherwise cadet, or frozen
+// if inactive.
 type Status = 'cadet' | 'frozen' | 'blackholed' | 'piscine';
+const past = (iso?: string | null) => !!iso && new Date(iso).getTime() < Date.now();
 const status = (s: PiscineStudent): Status =>
   s.cursusLevel == null
     ? 'piscine'
-    : s.blackholedAt && new Date(s.blackholedAt).getTime() < Date.now()
+    : past(s.blackholedAt) || past(s.cursusEndAt)
       ? 'blackholed'
       : s.active
         ? 'cadet'

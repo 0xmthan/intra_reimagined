@@ -26,18 +26,19 @@ interface ApiUser {
 interface CursusRow {
   level: number;
   blackholedAt: string | null;
+  endAt: string | null;
 }
 
-/** user id → their row in one cursus (level, blackhole date), asked 100 users at a time. */
+/** user id → their row in one cursus (level, blackhole and end dates), asked 100 users at a time. */
 async function fetchCursus(api: FtApi, cursusId: number, ids: number[]): Promise<Map<number, CursusRow>> {
   const out = new Map<number, CursusRow>();
   for (let i = 0; i < ids.length; i += PER_PAGE) {
     const chunk = ids.slice(i, i + PER_PAGE);
-    const rows = await api.get<{ level: number; blackholed_at: string | null; user: { id: number } }[]>(
+    const rows = await api.get<{ level: number; blackholed_at: string | null; end_at: string | null; user: { id: number } }[]>(
       `/v2/cursus_users?filter[cursus_id]=${cursusId}&filter[user_id]=${chunk.join(',')}&per_page=${PER_PAGE}`,
     );
     for (const r of rows) {
-      if ((out.get(r.user.id)?.level ?? -1) < r.level) out.set(r.user.id, { level: r.level, blackholedAt: r.blackholed_at });
+      if ((out.get(r.user.id)?.level ?? -1) < r.level) out.set(r.user.id, { level: r.level, blackholedAt: r.blackholed_at, endAt: r.end_at });
     }
   }
   return out;
@@ -64,11 +65,12 @@ async function fetchList(api: FtApi, campusId: number, year: string, month: stri
     piscineLevel: piscine.get(u.id)?.level ?? null,
     cursusLevel: cursus.get(u.id)?.level ?? null,
     blackholedAt: cursus.get(u.id)?.blackholedAt ?? null,
+    cursusEndAt: cursus.get(u.id)?.endAt ?? null,
   }));
 }
 
 /** Lists saved before the current student shape get rebuilt instead of served. */
-const isCurrent = (l: PiscineList) => !l.students.length || 'blackholedAt' in l.students[0];
+const isCurrent = (l: PiscineList) => !l.students.length || 'cursusEndAt' in l.students[0];
 
 export class PiscineService {
   #inflight = new Map<string, Promise<PiscineList>>();
