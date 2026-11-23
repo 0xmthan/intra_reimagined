@@ -18,6 +18,7 @@ import { openBannerEditor } from './banner';
 import { setHTML } from '../html';
 import { openClusters } from '../clusters';
 import { bindFriendButton } from '../friends';
+import { attachBlackhole } from './blackhole';
 
 export const HERO_ID = 'ir-hero';
 const ON_CLASS = 'ir-hero-on';
@@ -25,12 +26,15 @@ const DAY_MS = 86_400_000;
 
 /** Every pace as a chip (beside the next milestone's date): the student's highlighted, faster ones
  * crossed out, slower ones dimmed.
- * Only on your own profile: the pace API leaves `pace` out (null) for anyone else. */
-function pacesHtml(mine: number) {
+ * Your own profile (the pace API leaves `pace` out, null, for anyone else), or anyone on probation
+ * (always pace 24). */
+function pacesHtml(mine: number, own = true) {
   const all = [...new Set([...PACES, mine])].sort((a, b) => a - b);
   const chip = (p: number) => {
     const kind = p < mine ? 'gone' : p === mine ? 'mine' : 'slower';
-    const tip = p === mine ? `Your pace: common core in ${p} months` : p < mine ? `Pace ${p}: faster than yours` : `Pace ${p}`;
+    const tip = p === mine
+      ? own ? `Your pace: common core in ${p} months` : `On probation: pace ${p}, common core in ${p} months`
+      : p < mine ? `Pace ${p}: faster than ${own ? 'yours' : 'theirs'}` : `Pace ${p}`;
     return `<span class="pace ${kind}" data-tip="${tip}">${p}</span>`;
   };
   return `<div class="paces">${all.map(chip).join('')}</div>`;
@@ -296,6 +300,7 @@ const ZOOM_CSS = `
 
 /** Hide intra's banner (CSS keyed on html.ir-hero-on) and show it again. */
 export function unmountHero() {
+  attachBlackhole(null);
   document.getElementById(HERO_ID)?.remove();
   document.documentElement.classList.remove(ON_CLASS);
 }
@@ -384,6 +389,11 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   // Red only where a deadline can blackhole you (probation / old blackhole); a regular pace
   // milestone, even a close or missed one, isn't one.
   const danger = !frozen && blackhole;
+  // The pace API only gives your own pace; anyone on probation is on pace 24, whoever's profile it is.
+  const paceNum = pace?.pace ?? (goals?.probationary_period && !frozen ? 24 : undefined);
+  // The blackhole itself (blackhole.ts), closer the fewer days are left; swallowing the card once blackholed.
+  const bhLeft = daysLeft ?? bhDays;
+  const bh = danger && (blackholed || bhLeft !== undefined) ? { days: blackholed ? 0 : bhLeft!, gone: blackholed } : undefined;
   const current = pace ? paceSegments(pace).find((s) => s.level === pace.milestone) : undefined;
   const used = current ? Math.min(1, Math.max(0, (Date.now() - current.from) / (current.to - current.from))) : undefined;
   const C = 2 * Math.PI * 18;
@@ -500,7 +510,8 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           </div>
           ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
-        <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}">
+        <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}${bh ? ' bh' : ''}">
+          ${bh ? `<canvas class="bh-canvas" aria-hidden="true" data-days="${bh.days}" data-gone="${bh.gone ? 1 : 0}"></canvas>` : ''}
           <h3>${icon(frozen ? 'snow' : blackhole ? 'hole' : 'flag')} ${frozen ? 'Freeze' : absorbed || (missed && blackhole) ? 'Blackholed' : missed ? 'Deadline passed' : blackhole ? 'Blackhole' : ccDone && daysLeft === undefined ? (alumniAt !== undefined ? 'Alumnization' : 'Common core') : 'Next deadline'}</h3>
           ${missed ? `
             <div class="big" data-tip="${-daysLeft!} days">${spanHtml(Date.now() + daysLeft! * DAY_MS, Date.now())}<small> ago</small></div>
@@ -512,11 +523,11 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
             <div class="big" data-tip="${Math.abs(bhDays)} days">${spanHtml(Date.now(), Date.now() + bhDays * DAY_MS)}${absorbed ? '<small> ago</small>' : ''}</div>
             <div class="sub">${absorbed ? 'Absorbed on' : 'Blackhole on'} ${esc(goals?.bh_date ?? '')}</div>
           ` : daysLeft !== undefined ? `
-            <div class="big">${daysLeft}<small> days</small></div>
-            ${pace?.pace
-              ? `<div class="sub-row"><div class="sub" data-tip="Milestone ${pace.milestone} deadline">${esc(goals?.next_milestone ?? '')}</div>${pacesHtml(pace.pace)}</div>`
+            <div class="big"${bh && used !== undefined ? ` data-tip="${Math.round(used * 100)}% of this milestone's time used"` : ''}>${daysLeft}<small> days</small></div>
+            ${paceNum
+              ? `<div class="sub-row${d.own ? '' : ' stacked'}"><div class="sub"${pace ? ` data-tip="Milestone ${pace.milestone} deadline"` : ''}>${esc(goals?.next_milestone ?? '')}</div>${pacesHtml(paceNum, d.own)}</div>`
               : `<div class="sub">${pace ? `Milestone ${pace.milestone} · ` : ''}${esc(goals?.next_milestone ?? '')}</div>`}
-            ${used !== undefined ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
+            ${used !== undefined && !bh ? `<svg class="ring" viewBox="0 0 46 46" data-tip="${Math.round(used * 100)}% of this milestone's time used"><circle class="bg" cx="23" cy="23" r="18"/><circle class="fg" cx="23" cy="23" r="18" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - used)}"/></svg>` : ''}
           ` : ccDone && alumniDays !== undefined && alumniDays > 0 ? `
             <div class="big" data-tip="${alumniDays} days">${spanHtml(Date.now(), alumniAt!)}<small> left</small></div>
             <div class="sub" data-tip="Common core validated${pace?.alumni?.counter_begin_at ? ` on ${fmtIsoDate(pace.alumni.counter_begin_at)}` : ''}">Alumni on ${fmtIsoDate(pace!.alumni!.deadline)}</div>
@@ -544,6 +555,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
     </div>`);
 
   bind(hero, d);
+  attachBlackhole(hero.querySelector<HTMLCanvasElement>('.bh-canvas'));
 }
 
 function bind(hero: HTMLElement, d: HeroData) {

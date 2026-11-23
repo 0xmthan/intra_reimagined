@@ -688,6 +688,30 @@ a.mini-btn {
   background: linear-gradient(160deg, rgba(255, 90, 95, 0.18), transparent 70%);
 }
 
+/* The blackhole (blackhole.ts) behind the card's text; the card clips it. */
+.deadline.bh {
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(120% 140% at 85% 55%, rgba(30, 6, 4, 0.55), transparent 70%),
+    linear-gradient(160deg, rgba(255, 90, 95, 0.14), transparent 70%);
+}
+
+.bh-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* dimmer under the text (left), full strength where the hole sits */
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.55) 40%, #000 70%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.55) 40%, #000 70%);
+}
+
+.deadline.bh > :not(canvas) {
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
 .deadline.frozen {
   background: linear-gradient(160deg, rgba(120, 190, 255, 0.16), transparent 70%);
 }
@@ -793,6 +817,12 @@ a.mini-btn {
   align-items: center;
   column-gap: 10px;
   row-gap: 6px;
+}
+
+/* Someone else's profile (pace 24 on probation): the chips under the date. */
+.sub-row.stacked {
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .paces {
