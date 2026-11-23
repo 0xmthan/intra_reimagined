@@ -33,7 +33,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { existsSync } from 'node:fs';
 import { FtApi, FtApiError } from './ft-api.ts';
 import { TtlCache } from './cache.ts';
-import { RateLimiter } from './rate-limit.ts';
+import { Budget, RateLimiter } from './rate-limit.ts';
 import { Db, type Piscine } from './db.ts';
 import { EvalService } from './evals.ts';
 import { LogtimeService } from './logtime.ts';
@@ -88,7 +88,12 @@ if (db) await db.init();
 else console.warn('No DATABASE_URL: data is only cached in memory.');
 const evals = new EvalService(api, db);
 const logtime = new LogtimeService(api, db);
-const friendStats = new FriendStatsService(api);
+// The friends panel's share of 42's 2 requests/s (stats and logtime refreshes): about half, so
+// profiles, events and the rest always have room. Logtime leaves a reserve for seats.
+const friendsBudget = new Budget(1, 20);
+const FRIENDS_LOGTIME_STALE_MS = 60_000;
+const FRIENDS_LOGTIME_RESERVE = 5;
+const friendStats = new FriendStatsService(api, friendsBudget);
 const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
@@ -433,7 +438,7 @@ const server = createServer(async (req, res) => {
         // left out this time rather than holding up the panel.
         Promise.all(
           list.map((l) =>
-            Promise.race([logtime.get(l), new Promise<undefined>((r) => setTimeout(r, 1500))]).then(
+            Promise.race([logtime.get(l, FRIENDS_LOGTIME_STALE_MS, () => friendsBudget.take(1, FRIENDS_LOGTIME_RESERVE)), new Promise<undefined>((r) => setTimeout(r, 1500))]).then(
               (t): [string, ReturnType<typeof logtimeHours> | undefined] => [l, t ? logtimeHours(t.sessions, weekStart) : undefined],
               (): [string, undefined] => [l, undefined],
             ),

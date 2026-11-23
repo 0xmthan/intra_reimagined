@@ -20,12 +20,12 @@ import { fetchFriendStats, fetchFriends, saveFriend } from './profile/data';
 const HOST = 'ir-friends';
 const PROFILE = 'https://profile.intra.42.fr';
 const STATS_KEY = 'friendStats';
-const TICK_MS = 60_000;
+const TICK_MS = 30_000;
 const PARALLEL = 2; // friends whose milestone days are fetched from intra at once
 const MIN = 60_000;
 
 /** How old each part may get while the panel is open: `server` = everything from our server. */
-const STALE = { server: 3 * MIN, pace: 6 * 60 * MIN } as const;
+const STALE = { server: 30_000, pace: 6 * 60 * MIN } as const;
 
 /** `photo`/`groups`: what the hover card shows (handed to it, see primeUserTip). */
 interface Light { name: string; image?: string; photo?: string; groups?: string[]; seat?: string; level?: number; at: number }

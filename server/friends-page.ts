@@ -416,8 +416,8 @@ const JS = `'use strict';
     }
   }
   load();
-  setInterval(() => { if (!document.hidden) load(); else if (data) $('ago').textContent = ago(data.at); }, 60_000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && data && Date.now() - data.at > 60_000) load(); });
+  setInterval(() => { if (!document.hidden) load(); else if (data) $('ago').textContent = ago(data.at); }, 30_000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && data && Date.now() - data.at > 30_000) load(); });
 })();
 `;
 

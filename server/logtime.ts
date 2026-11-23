@@ -83,10 +83,14 @@ export class LogtimeService {
     return p;
   }
 
-  async get(login: string): Promise<Logtime> {
+  /**
+   * The stored history, refreshed in the background when older than `staleMs` and `allow()` agrees
+   * (the friends panel asks more often, within its budget). The first time waits for the whole history.
+   */
+  async get(login: string, staleMs = LOGTIME_STALE_MS, allow: () => boolean = () => true): Promise<Logtime> {
     const stored = await this.#load(login);
     if (!stored) return this.#sync(login); // first time: the whole history
-    if (Date.now() - stored.syncedAt.getTime() > LOGTIME_STALE_MS) {
+    if (Date.now() - stored.syncedAt.getTime() > staleMs && !this.#inflight.has(login) && allow()) {
       this.#sync(login, stored.sessions).catch((e) => console.error('logtime refresh failed', login, e));
     }
     return pack(login, stored.sessions, stored.syncedAt);
