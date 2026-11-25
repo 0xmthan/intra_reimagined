@@ -688,12 +688,11 @@ a.mini-btn {
   background: linear-gradient(160deg, rgba(255, 90, 95, 0.18), transparent 70%);
 }
 
-/* The blackhole (blackhole.ts) behind the card's text; the card clips it. */
+/* The blackhole (blackhole.ts) behind the card's text, on black space; the card clips it. */
 .deadline.bh {
   overflow: hidden;
   isolation: isolate;
-  background: radial-gradient(120% 140% at 85% 55%, rgba(30, 6, 4, 0.55), transparent 70%),
-    linear-gradient(160deg, rgba(255, 90, 95, 0.14), transparent 70%);
+  background: #000;
 }
 
 .bh-canvas {

@@ -3,8 +3,8 @@
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
-import { fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
-import { ACCENTS, MODES, currentAccent, currentMode, setPref } from './theme';
+import { fetchCoalition, fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
+import { ACCENTS, MODES, coalitionColor, currentAccent, currentMode, hasMainCoalition, rememberCoalitionColor, setPref } from './theme';
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -92,7 +92,22 @@ function addThemePicker(section: HTMLElement) {
   };
   // Saved on the server too, so it follows you to other devices (and visitors can see it).
   group('Mode', MODES, currentMode(), (id) => { void setPref('mode', id); void saveIrTheme({ mode: id }); }, '', 'mode');
-  group('Accent', ACCENTS, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
+  const accents = ACCENTS.map((a) => (a.id === 'coalition' ? { ...a, color: coalitionColor() ?? a.color } : a));
+  group('Accent', accents, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
+
+  // No 42cursus coalition color yet (profile not opened since install, or still in the piscine):
+  // ask intra, 42cursus first, then the C Piscine's for those who aren't in 42cursus (yet).
+  const me = myLogin();
+  if (!hasMainCoalition() && me) {
+    (async () => {
+      const main = await fetchCoalition(me, '42cursus');
+      if (main?.color) rememberCoalitionColor(main.color, '42cursus');
+      else if (!coalitionColor()) rememberCoalitionColor((await fetchCoalition(me, 'c-piscine'))?.color, 'c-piscine');
+      const sw = section.querySelector<HTMLElement>('.ir-theme[data-id="coalition"] .ir-theme-swatch');
+      const color = coalitionColor();
+      if (color && sw) sw.style.setProperty('--sw', color);
+    })().catch(() => {});
+  }
 }
 
 /** A checkbox saved on the server; flips back with the error if saving fails. */

@@ -36,6 +36,9 @@ export const MODES = [
 export const ACCENTS = [
   { id: 'default', name: 'Default', color: '#00babc' },
   { id: 'green', name: 'Green', color: '#3ddc84' },
+  // Your coalition's color (on someone's shared profile: theirs). Its tokens are worked out from
+  // that color (see paintAccent); until it's known, it looks like Default.
+  { id: 'coalition', name: 'Coalition', color: '#00babc' },
 ] as const;
 export type Mode = (typeof MODES)[number]['id'];
 export type Accent = (typeof ACCENTS)[number]['id'];
@@ -68,6 +71,7 @@ function apply(pref: Pref, value: unknown, persist = true) {
   if (v === fallback) html.removeAttribute(attr);
   else html.setAttribute(attr, v);
   if (persist) remember(pref, v, fallback);
+  paintAccent();
   if (pref === 'mode') {
     if (v === 'dark') goDark();
     else html.classList.remove('ir-dark'); // the .ir-dk-* tags only style under html.ir-dark
@@ -75,8 +79,9 @@ function apply(pref: Pref, value: unknown, persist = true) {
 }
 
 /** Shows someone else's shared theme on their profile (not saved: only for this page). */
-export function showVisitedTheme(t: { mode: string; accent: string }) {
+export function showVisitedTheme(t: { mode: string; accent: string }, coalColor?: string) {
   visiting = true;
+  visitedCoal = coalColor;
   apply('mode', t.mode, false);
   apply('accent', t.accent, false);
 }
@@ -119,7 +124,123 @@ export async function setPref(pref: Pref, v: string) {
   }
 }
 
+// ---------- coalition accent ----------
+// The coalition color is kept like the prefs: storage.local for every intra site, mirrored to each
+// site's localStorage so it paints at document_start. The tokens go inline on <html>, so they win
+// over the stylesheet's accent blocks, and are redone when the mode flips.
+// Which coalition: your 42cursus one; until you have one (in the piscine), your C Piscine one. A
+// piscine color never replaces a 42cursus one, whichever cursus your profile is showing.
+
+const COAL_KEY = 'coalitionColor';
+const COAL_LOCAL = 'ir-coalition-color';
+const COAL_CURSUS_KEY = 'coalitionCursus'; // the cursus the color came from
+const COAL_CURSUS_LOCAL = 'ir-coalition-cursus';
+const MAIN_CURSUS = '42cursus';
+const ACCENT_VARS = ['--ir-accent', '--ir-accent-rgb', '--ir-accent-hi', '--ir-accent-soft', '--ir-accent-muted'] as const;
+let ownCoal: string | undefined;
+let ownCoalCursus: string | undefined;
+let visitedCoal: string | undefined;
+
+type Rgb = [number, number, number];
+
+function toRgb(c: string): Rgb | undefined {
+  const m = c.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i)?.[1];
+  if (m) {
+    const h = m.length === 3 ? [...m].map((x) => x + x).join('') : m;
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as Rgb;
+  }
+  const p = /^rgba?\(/i.test(c.trim()) ? parse(c) : undefined;
+  return p ? [p.r, p.g, p.b] : undefined;
+}
+
+function rgbToHsl([r, g, b]: Rgb): Rgb {
+  [r, g, b] = [r / 255, g / 255, b / 255];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): Rgb {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r, g, b].map((v) => Math.round((v + m) * 255)) as Rgb;
+}
+
+const hex = (rgb: Rgb) => `#${rgb.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * The accent tokens for a coalition color: its hue and saturation, with the lightness pulled into
+ * a range that reads on our surfaces (lighter on dark, darker on light), like the built-in accents.
+ */
+function accentTokens(color: string, mode: string): Record<(typeof ACCENT_VARS)[number], string> | undefined {
+  const rgb = toRgb(color);
+  if (!rgb) return undefined;
+  const [h, s, l] = rgbToHsl(rgb);
+  const at = (light: number, sat = s) => hslToRgb(h, clamp(sat, 0, 1), clamp(light, 0, 1));
+  const dark = clamp(l, 0.42, 0.62);
+  const base = mode === 'light' ? clamp(l, 0.32, 0.48) : dark;
+  const main = at(base);
+  return {
+    '--ir-accent': hex(main),
+    '--ir-accent-rgb': main.join(', '),
+    '--ir-accent-hi': hex(mode === 'light' ? at(base - 0.1) : at(Math.min(base + 0.16, 0.8))),
+    '--ir-accent-soft': hex(mode === 'light' ? at(base - 0.06) : at(Math.min(base + 0.1, 0.74))),
+    '--ir-accent-muted': hex(at(dark - 0.04, s * 0.75)), // the header stays dark in both modes
+  };
+}
+
+/** Sets (or clears) the coalition accent's tokens for the current accent, mode and page. */
+function paintAccent() {
+  const style = document.documentElement.style;
+  const color = read('accent') === 'coalition' ? (visiting ? visitedCoal : ownCoal) : undefined;
+  const tokens = color ? accentTokens(color, read('mode')) : undefined;
+  for (const v of ACCENT_VARS) {
+    if (tokens) style.setProperty(v, tokens[v]);
+    else style.removeProperty(v);
+  }
+}
+
+/** Your coalition's color, once seen (on your profile, or fetched by settings). */
+export const coalitionColor = () => ownCoal;
+
+/**
+ * Remembers your coalition's color in `cursus` (from your own profile, or settings) for the
+ * Coalition accent everywhere. A 42cursus color is kept over any other cursus's.
+ */
+export function rememberCoalitionColor(color: string | undefined, cursus: string) {
+  if (!color || !toRgb(color)) return;
+  if (cursus !== MAIN_CURSUS && ownCoalCursus === MAIN_CURSUS) return; // the piscine's doesn't replace it
+  if (color === ownCoal && cursus === ownCoalCursus) return;
+  ownCoal = color;
+  ownCoalCursus = cursus;
+  try {
+    localStorage.setItem(COAL_LOCAL, color);
+    localStorage.setItem(COAL_CURSUS_LOCAL, cursus);
+  } catch {
+    /* storage.local still has it */
+  }
+  ext?.storage.local.set({ [COAL_KEY]: color, [COAL_CURSUS_KEY]: cursus }).catch(() => {});
+  paintAccent();
+}
+
+/** Whether the color known now is from 42cursus (no better one to look for). */
+export const hasMainCoalition = () => !!ownCoal && ownCoalCursus === MAIN_CURSUS;
+
 function initPrefs() {
+  try {
+    ownCoal = localStorage.getItem(COAL_LOCAL) ?? undefined;
+    ownCoalCursus = localStorage.getItem(COAL_CURSUS_LOCAL) ?? undefined;
+  } catch {
+    /* unreadable: the storage.local read below sets it */
+  }
   const keys = Object.keys(PREFS) as Pref[];
   for (const k of keys) {
     try {
@@ -132,11 +253,31 @@ function initPrefs() {
       /* unreadable: the storage.local read below sets it */
     }
   }
+  paintAccent();
+  const takeCoal = (v: unknown, cursus: unknown) => {
+    if (typeof v !== 'string' || !toRgb(v)) return;
+    ownCoal = v;
+    ownCoalCursus = typeof cursus === 'string' ? cursus : undefined;
+    try {
+      localStorage.setItem(COAL_LOCAL, v);
+      if (ownCoalCursus) localStorage.setItem(COAL_CURSUS_LOCAL, ownCoalCursus);
+    } catch {
+      /* kept for this page */
+    }
+  };
   try {
-    ext?.storage.local.get(keys).then((r) => keys.forEach((k) => apply(k, r[k])), () => {});
+    ext?.storage.local.get([...keys, COAL_KEY, COAL_CURSUS_KEY]).then((r) => {
+      takeCoal(r[COAL_KEY], r[COAL_CURSUS_KEY]);
+      keys.forEach((k) => apply(k, r[k])); // paints the accent too
+    }, () => {});
     // Picked in another tab: follow along.
     ext?.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local') for (const k of keys) if (k in changes) apply(k, changes[k].newValue);
+      if (area !== 'local') return;
+      if (COAL_KEY in changes) {
+        takeCoal(changes[COAL_KEY].newValue, changes[COAL_CURSUS_KEY]?.newValue ?? ownCoalCursus);
+        paintAccent();
+      }
+      for (const k of keys) if (k in changes) apply(k, changes[k].newValue);
     });
   } catch {
     /* no extension storage (shouldn't happen in a content script) */
