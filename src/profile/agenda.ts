@@ -3,7 +3,7 @@
 //   - headers grouping the events: This week, Next week, Later in November, December, ...
 //   - short months ("Nov") and the event's kind as a tag in front of its title
 //   - the whole row (or "See more") opens the event in the same panel as the Logtime calendar's,
-//     with who's subscribed (profile/logtime-events.ts)
+//     with who's subscribed (profile/logtime-events.ts); exams open intra's own popup
 // Re-applied whenever intra swaps the list (filters).
 import { openEventPanel } from './logtime-events';
 
@@ -79,6 +79,23 @@ function enhance(list: HTMLElement) {
       item.setAttribute('role', 'button');
       item.addEventListener('keydown', (e) => {
         if (e.target === item && (e.key === 'Enter' || e.key === ' ')) open(e);
+      });
+    } else if (more) {
+      // Anything else (exams: /exams/:id): intra's own popup, through its "See more".
+      // It's a link to "#": without this the page jumps to the top (intra's popup still opens).
+      more.addEventListener('click', (e) => e.preventDefault());
+      item.classList.add('ir-agenda-link');
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+      item.addEventListener('click', (e) => {
+        if ((e.target as Element).closest('a, .copy')) return; // the link inside, or "copy link"
+        more.click();
+      });
+      item.addEventListener('keydown', (e) => {
+        if (e.target === item && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          more.click();
+        }
       });
     }
   }
