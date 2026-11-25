@@ -102,8 +102,8 @@ export function mountHero() {
   banner.before(host);
   document.documentElement.classList.add(ON_CLASS);
 
-  // Your coalition's color, for the Coalition accent (the cursus the page opens on).
-  if (data.own) rememberCoalitionColor(data.coalition?.color);
+  // Your coalition's color, for the Coalition accent (42cursus wins over the piscine; see theme.ts).
+  if (data.own) rememberCoalitionColor(data.coalition?.color, data.cursus.value);
 
   const state: State = { data };
   const paint = () => render(hero, state);
@@ -118,6 +118,7 @@ export function mountHero() {
       fetchCoalition(state.data.login, state.data.cursus.value),
     ]);
     if (mine !== req) return; // a newer cursus was picked meanwhile
+    if (state.data.own) rememberCoalitionColor(coal?.color, state.data.cursus.value);
     // Re-read intra's banner too: by now intra has finished its own cursus switch.
     state.data = readHero() ?? state.data;
     Object.assign(state, { goals, coal, goalsLoaded: true });

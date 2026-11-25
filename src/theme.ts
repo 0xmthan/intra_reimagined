@@ -128,11 +128,17 @@ export async function setPref(pref: Pref, v: string) {
 // The coalition color is kept like the prefs: storage.local for every intra site, mirrored to each
 // site's localStorage so it paints at document_start. The tokens go inline on <html>, so they win
 // over the stylesheet's accent blocks, and are redone when the mode flips.
+// Which coalition: your 42cursus one; until you have one (in the piscine), your C Piscine one. A
+// piscine color never replaces a 42cursus one, whichever cursus your profile is showing.
 
 const COAL_KEY = 'coalitionColor';
 const COAL_LOCAL = 'ir-coalition-color';
+const COAL_CURSUS_KEY = 'coalitionCursus'; // the cursus the color came from
+const COAL_CURSUS_LOCAL = 'ir-coalition-cursus';
+const MAIN_CURSUS = '42cursus';
 const ACCENT_VARS = ['--ir-accent', '--ir-accent-rgb', '--ir-accent-hi', '--ir-accent-soft', '--ir-accent-muted'] as const;
 let ownCoal: string | undefined;
+let ownCoalCursus: string | undefined;
 let visitedCoal: string | undefined;
 
 type Rgb = [number, number, number];
@@ -205,22 +211,33 @@ function paintAccent() {
 /** Your coalition's color, once seen (on your profile, or fetched by settings). */
 export const coalitionColor = () => ownCoal;
 
-/** Remembers your coalition's color (from your own profile) for the Coalition accent everywhere. */
-export function rememberCoalitionColor(color: string | undefined) {
-  if (!color || !toRgb(color) || color === ownCoal) return;
+/**
+ * Remembers your coalition's color in `cursus` (from your own profile, or settings) for the
+ * Coalition accent everywhere. A 42cursus color is kept over any other cursus's.
+ */
+export function rememberCoalitionColor(color: string | undefined, cursus: string) {
+  if (!color || !toRgb(color)) return;
+  if (cursus !== MAIN_CURSUS && ownCoalCursus === MAIN_CURSUS) return; // the piscine's doesn't replace it
+  if (color === ownCoal && cursus === ownCoalCursus) return;
   ownCoal = color;
+  ownCoalCursus = cursus;
   try {
     localStorage.setItem(COAL_LOCAL, color);
+    localStorage.setItem(COAL_CURSUS_LOCAL, cursus);
   } catch {
     /* storage.local still has it */
   }
-  ext?.storage.local.set({ [COAL_KEY]: color }).catch(() => {});
+  ext?.storage.local.set({ [COAL_KEY]: color, [COAL_CURSUS_KEY]: cursus }).catch(() => {});
   paintAccent();
 }
+
+/** Whether the color known now is from 42cursus (no better one to look for). */
+export const hasMainCoalition = () => !!ownCoal && ownCoalCursus === MAIN_CURSUS;
 
 function initPrefs() {
   try {
     ownCoal = localStorage.getItem(COAL_LOCAL) ?? undefined;
+    ownCoalCursus = localStorage.getItem(COAL_CURSUS_LOCAL) ?? undefined;
   } catch {
     /* unreadable: the storage.local read below sets it */
   }
@@ -237,25 +254,27 @@ function initPrefs() {
     }
   }
   paintAccent();
-  const takeCoal = (v: unknown) => {
+  const takeCoal = (v: unknown, cursus: unknown) => {
     if (typeof v !== 'string' || !toRgb(v)) return;
     ownCoal = v;
+    ownCoalCursus = typeof cursus === 'string' ? cursus : undefined;
     try {
       localStorage.setItem(COAL_LOCAL, v);
+      if (ownCoalCursus) localStorage.setItem(COAL_CURSUS_LOCAL, ownCoalCursus);
     } catch {
       /* kept for this page */
     }
   };
   try {
-    ext?.storage.local.get([...keys, COAL_KEY]).then((r) => {
-      takeCoal(r[COAL_KEY]);
+    ext?.storage.local.get([...keys, COAL_KEY, COAL_CURSUS_KEY]).then((r) => {
+      takeCoal(r[COAL_KEY], r[COAL_CURSUS_KEY]);
       keys.forEach((k) => apply(k, r[k])); // paints the accent too
     }, () => {});
     // Picked in another tab: follow along.
     ext?.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       if (COAL_KEY in changes) {
-        takeCoal(changes[COAL_KEY].newValue);
+        takeCoal(changes[COAL_KEY].newValue, changes[COAL_CURSUS_KEY]?.newValue ?? ownCoalCursus);
         paintAccent();
       }
       for (const k of keys) if (k in changes) apply(k, changes[k].newValue);

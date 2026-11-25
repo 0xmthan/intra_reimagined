@@ -4,7 +4,7 @@ import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
 import { fetchCoalition, fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
-import { ACCENTS, MODES, coalitionColor, currentAccent, currentMode, rememberCoalitionColor, setPref } from './theme';
+import { ACCENTS, MODES, coalitionColor, currentAccent, currentMode, hasMainCoalition, rememberCoalitionColor, setPref } from './theme';
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -95,14 +95,18 @@ function addThemePicker(section: HTMLElement) {
   const accents = ACCENTS.map((a) => (a.id === 'coalition' ? { ...a, color: coalitionColor() ?? a.color } : a));
   group('Accent', accents, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
 
-  // Coalition color not seen yet (your profile wasn't opened since install): ask intra for it.
+  // No 42cursus coalition color yet (profile not opened since install, or still in the piscine):
+  // ask intra, 42cursus first, then the C Piscine's for those who aren't in 42cursus (yet).
   const me = myLogin();
-  if (!coalitionColor() && me) {
-    fetchCoalition(me, '42cursus').then((c) => {
-      rememberCoalitionColor(c?.color);
+  if (!hasMainCoalition() && me) {
+    (async () => {
+      const main = await fetchCoalition(me, '42cursus');
+      if (main?.color) rememberCoalitionColor(main.color, '42cursus');
+      else if (!coalitionColor()) rememberCoalitionColor((await fetchCoalition(me, 'c-piscine'))?.color, 'c-piscine');
       const sw = section.querySelector<HTMLElement>('.ir-theme[data-id="coalition"] .ir-theme-swatch');
-      if (c?.color && sw) sw.style.setProperty('--sw', c.color);
-    });
+      const color = coalitionColor();
+      if (color && sw) sw.style.setProperty('--sw', color);
+    })().catch(() => {});
   }
 }
 
