@@ -11,7 +11,7 @@
   --danger: #ff5a5f;
   --ok: #3ddc84;
   --done: var(--ir-accent-muted, #4fb8bd); /* follows the accent theme (styles.css) */
-  --todo: rgba(79, 184, 189, 0.22);
+  --todo: rgba(255, 255, 255, 0.1); /* milestones not reached yet: neutral grey in every accent */
 }
 
 * {

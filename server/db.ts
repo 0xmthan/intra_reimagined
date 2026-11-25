@@ -43,6 +43,10 @@ export interface EvalStats {
   partners: Record<string, number>;
   /** login → those evaluations: [project id, filled in at (ms)]. Absent on rows saved before it was kept. */
   partnerEvals?: Record<string, [number, number][]> | null;
+  /** The newest filled-in evaluation counted (ms): hourly refreshes only ask 42 for later ones. */
+  lastFilledAt?: number | null;
+  /** When the whole history was last read from 42 (daily, to catch anything changed after the fact). */
+  fullAt?: Date | null;
   refreshedAt: Date;
 }
 
@@ -107,6 +111,8 @@ export class Db {
       )`;
     await this.#sql`alter table eval_stats add column if not exists partners jsonb`;
     await this.#sql`alter table eval_stats add column if not exists partner_evals jsonb`;
+    await this.#sql`alter table eval_stats add column if not exists last_filled_at timestamptz`;
+    await this.#sql`alter table eval_stats add column if not exists full_at timestamptz`;
     // 42 project names by id (evals.ts): they never change, so each is asked of 42 once.
     await this.#sql`create table if not exists project_names (id integer primary key, name text not null)`;
     // One custom banner per student (banners.ts); served publicly by its content hash.
@@ -362,18 +368,22 @@ export class Db {
   }
 
   async getEvalStats(login: string): Promise<EvalStats | undefined> {
-    const [row] = await this.#sql<EvalStats[]>`
-      select login, total, failed, outstanding, partners, partner_evals as "partnerEvals", refreshed_at as "refreshedAt"
+    const [row] = await this.#sql<(Omit<EvalStats, 'lastFilledAt'> & { lastFilledAt: Date | null })[]>`
+      select login, total, failed, outstanding, partners, partner_evals as "partnerEvals",
+        last_filled_at as "lastFilledAt", full_at as "fullAt", refreshed_at as "refreshedAt"
       from eval_stats where login = ${login}`;
-    return row;
+    return row && { ...row, lastFilledAt: row.lastFilledAt ? row.lastFilledAt.getTime() : null };
   }
 
   async saveEvalStats(s: Omit<EvalStats, 'refreshedAt'>) {
+    const last = s.lastFilledAt ? new Date(s.lastFilledAt) : null;
+    const full = s.fullAt ?? null;
     await this.#sql`
-      insert into eval_stats (login, total, failed, outstanding, partners, partner_evals)
-      values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding}, ${this.#sql.json(s.partners)}, ${this.#sql.json(s.partnerEvals ?? {})})
+      insert into eval_stats (login, total, failed, outstanding, partners, partner_evals, last_filled_at, full_at)
+      values (${s.login}, ${s.total}, ${s.failed}, ${s.outstanding}, ${this.#sql.json(s.partners)}, ${this.#sql.json(s.partnerEvals ?? {})}, ${last}, ${full})
       on conflict (login) do update set total = excluded.total, failed = excluded.failed,
-        outstanding = excluded.outstanding, partners = excluded.partners, partner_evals = excluded.partner_evals, refreshed_at = now()`;
+        outstanding = excluded.outstanding, partners = excluded.partners, partner_evals = excluded.partner_evals,
+        last_filled_at = excluded.last_filled_at, full_at = excluded.full_at, refreshed_at = now()`;
   }
 
   async getProjectNames(ids: number[]): Promise<Map<number, string>> {

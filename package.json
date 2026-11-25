@@ -1,7 +1,7 @@
 {
   "name": "intra-reimagined",
   "private": true,
-  "version": "0.1.12",
+  "version": "0.1.15",
   "type": "module",
   "packageManager": "pnpm@12.8.1",
   "scripts": {

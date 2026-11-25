@@ -225,9 +225,37 @@ export async function fetchCoalition(login: string, cursus: string): Promise<Coa
     : undefined;
 }
 
+/** "12h 34m" from seconds, the way intra's attendance writes it. */
+const weekText = (total: number) => `${Math.floor(total / 3600)}h ${Math.floor((total % 3600) / 60)}m`;
+
+/** This week's Monday, 00:00 local. */
+function thisMonday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
 /**
- * Hours on campus for the last 4 full weeks (Mon–Sun), newest first like `edtrax_weeks`.
- * Fallback for profiles whose goals have no attendance (pisciners, blackholed accounts).
+ * The last 4 full weeks (Mon–Sun, local time), newest first like `edtrax_weeks`, from our server's
+ * sessions: each session's time inside each week (still logged in = up to now).
+ */
+export function weeksFromSessions(sessions: [number, number | null][]): Week[] {
+  const monday = thisMonday();
+  const now = Date.now();
+  return [1, 2, 3, 4].map((ago) => {
+    const from = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - ago * 7).getTime();
+    const to = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - (ago - 1) * 7).getTime();
+    let ms = 0;
+    for (const [a, b] of sessions) ms += Math.max(0, Math.min(b ?? now, to) - Math.max(a, from));
+    const total = Math.floor(ms / 1000);
+    return { name: ago === 1 ? 'Last week' : `W-${ago}`, hours: Math.floor(total / 3600), text: weekText(total) };
+  });
+}
+
+/**
+ * Hours on campus for the last 4 full weeks (Mon–Sun), newest first like `edtrax_weeks`, from
+ * intra's locations_stats. Last resort, when our server has nothing and goals have no attendance.
  */
 export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefined> {
   const stats = await getJSON<Record<string, string>>(
@@ -237,9 +265,7 @@ export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefin
   const secs = (t: string) => t.split(':').reduce((acc, n) => acc * 60 + Number(n), 0);
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // this week's Monday
+  const monday = thisMonday();
   return [1, 2, 3, 4].map((ago) => {
     let total = 0;
     for (let i = 0; i < 7; i++) {
@@ -247,8 +273,7 @@ export async function fetchLogtimeWeeks(login: string): Promise<Week[] | undefin
       day.setDate(monday.getDate() - ago * 7 + i);
       total += secs(stats[iso(day)] ?? '0:0:0');
     }
-    const h = Math.floor(total / 3600);
-    return { name: ago === 1 ? 'Last week' : `W-${ago}`, hours: h, text: `${h}h ${Math.floor((total % 3600) / 60)}m` };
+    return { name: ago === 1 ? 'Last week' : `W-${ago}`, hours: Math.floor(total / 3600), text: weekText(total) };
   });
 }
 

@@ -234,7 +234,7 @@ html.ir-logo-pinned .main-navbar {
   gap: 8px;
   padding: 0 min(8px, calc(var(--w) * 0.2%));
   border-radius: 6px;
-  background: #234f55;
+  background: rgba(128, 128, 128, 0.25); /* not reached yet: grey whatever the accent or mode */
   overflow: hidden;
   cursor: default;
 }

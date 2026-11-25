@@ -1,12 +1,15 @@
-// Evaluator stats from 42's API: /v2/users/:login/scale_teams/as_corrector, all pages.
-// Unlike a piscine these change, so they're kept in Postgres and refreshed when stale
-// (callers get the stored numbers right away while a refresh runs in the background).
+// Evaluator stats from 42's API: /v2/users/:login/scale_teams/as_corrector.
+// Unlike a piscine these change, so they're kept in Postgres and refreshed when stale (callers get
+// the stored numbers right away while a refresh runs in the background). Hourly, only the
+// evaluations filled in since the newest one counted are asked for (usually one request) and added
+// on; once a day the whole history is read again, to catch anything 42 changed after the fact.
 import type { FtApi } from './ft-api.ts';
 import type { Db, EvalStats } from './db.ts';
 
 const PER_PAGE = 100;
 const MAX_PAGES = 30; // 3000 evaluations: more than anyone has
-export const EVALS_STALE_MS = 6 * 3_600_000;
+export const EVALS_STALE_MS = 3_600_000; // new evaluations: hourly
+const EVALS_FULL_MS = 24 * 3_600_000; // the whole history again: daily
 
 interface ScaleTeam {
   filled_at: string | null;
@@ -26,6 +29,25 @@ export function summarize(login: string, teams: ScaleTeam[]): Omit<EvalStats, 'r
     outstanding: done.filter((t) => /outstanding/i.test(t.flag?.name ?? '')).length,
     partners: countPartners(done),
     partnerEvals: listPartnerEvals(done),
+    lastFilledAt: done.reduce((m, t) => Math.max(m, Date.parse(t.filled_at!)), 0) || null,
+  };
+}
+
+/** `older` plus the evaluations in `newer` (filled in after `older` was counted). */
+function merge(older: EvalStats, newer: Omit<EvalStats, 'refreshedAt'>): Omit<EvalStats, 'refreshedAt'> {
+  const partners = { ...older.partners };
+  for (const [l, n] of Object.entries(newer.partners)) partners[l] = (partners[l] ?? 0) + n;
+  const partnerEvals = { ...older.partnerEvals };
+  for (const [l, list] of Object.entries(newer.partnerEvals ?? {})) partnerEvals[l] = [...(partnerEvals[l] ?? []), ...list];
+  return {
+    login: older.login,
+    total: older.total + newer.total,
+    failed: older.failed + newer.failed,
+    outstanding: older.outstanding + newer.outstanding,
+    partners,
+    partnerEvals,
+    lastFilledAt: Math.max(older.lastFilledAt ?? 0, newer.lastFilledAt ?? 0) || null,
+    fullAt: older.fullAt,
   };
 }
 
@@ -59,11 +81,13 @@ export interface Together {
   evals: { project: string; at: number; you: boolean }[];
 }
 
-async function fetchAll(api: FtApi, login: string): Promise<ScaleTeam[]> {
+/** All their evaluations as corrector, or (with `since`, ms) only those filled in at or after it. */
+async function fetchAll(api: FtApi, login: string, since?: number): Promise<ScaleTeam[]> {
   const all: ScaleTeam[] = [];
+  const range = since ? `&range[filled_at]=${encodeURIComponent(new Date(since).toISOString())},2999-12-31T00:00:00Z` : '';
   for (let page = 1; page <= MAX_PAGES; page++) {
     const batch = await api.get<ScaleTeam[]>(
-      `/v2/users/${encodeURIComponent(login)}/scale_teams/as_corrector?per_page=${PER_PAGE}&page=${page}`,
+      `/v2/users/${encodeURIComponent(login)}/scale_teams/as_corrector?per_page=${PER_PAGE}&page=${page}${range}`,
     );
     all.push(...batch);
     if (batch.length < PER_PAGE) break;
@@ -83,13 +107,23 @@ export class EvalService {
     this.#db = db;
   }
 
-  /** One refresh per login at a time, however many requests ask for it. */
-  #refresh(login: string) {
+  /**
+   * One refresh per login at a time, however many requests ask for it. With `stored` (complete and
+   * read in full within the day): only what was filled in since, added on. Otherwise everything.
+   */
+  #refresh(login: string, stored?: EvalStats) {
     let p = this.#inflight.get(login);
     if (!p) {
-      p = fetchAll(this.#api, login)
-        .then(async (teams) => {
-          const stats = summarize(login, teams);
+      const since = stored?.lastFilledAt;
+      const recent = stored?.partnerEvals && since && stored.fullAt && Date.now() - stored.fullAt.getTime() < EVALS_FULL_MS;
+      p = (recent
+        ? fetchAll(this.#api, login, since).then((teams) =>
+            // The range includes `since` itself, which is already counted.
+            merge(stored, summarize(login, teams.filter((t) => t.filled_at && Date.parse(t.filled_at) > since))),
+          )
+        : fetchAll(this.#api, login).then((teams) => ({ ...summarize(login, teams), fullAt: new Date() }))
+      )
+        .then(async (stats) => {
           await this.#db?.saveEvalStats(stats);
           this.#memory.set(login, { ...stats, refreshedAt: new Date() });
           return stats;
@@ -145,7 +179,7 @@ export class EvalService {
     if (!stored || !stored.partners) return { ...(await this.#refresh(login)), refreshedAt: new Date() };
     // Rows from before the evaluations themselves were kept: served as they are, refreshed behind.
     if (!stored.partnerEvals || Date.now() - stored.refreshedAt.getTime() > EVALS_STALE_MS) {
-      this.#refresh(login).catch((e) => console.error('eval refresh failed', login, e));
+      this.#refresh(login, stored).catch((e) => console.error('eval refresh failed', login, e));
     }
     return stored;
   }

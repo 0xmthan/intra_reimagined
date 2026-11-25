@@ -5,7 +5,7 @@
 // Built in layers so animated backgrounds can drop in later without touching the rest:
 //   .bg (cover image today; canvas/video later) → .scrim (keeps text readable) → .inner (content)
 import css from './hero.css?inline';
-import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchIrUser, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week } from './data';
+import { checkBannerUrl, fetchBanner, fetchCoalition, fetchEvalStats, fetchGoals, fetchIrUser, fetchLogtimeSessions, fetchLogtimeWeeks, fetchPiscine, fetchPiscineFromProfile, readHero, type ApiPiscine, type Badge, type EvalStats, type Goals, type HeroData, type Week, weeksFromSessions } from './data';
 import { PACES } from '../pace/types';
 import { rememberCoalitionColor, syncOwnTheme, showVisitedTheme } from '../theme';
 import { bindPaceTooltips, fmtIsoDate, loadPace, paceSegments, paceTrackHtml } from '../pace/timeline';
@@ -56,7 +56,9 @@ interface State {
   /** As-evaluator stats from our API server; null = unavailable (no server / request failed),
    * 'auth' = needs login with 42 first. */
   evals?: EvalStats | null | 'auth';
-  /** Attendance from raw logtime, when goals have none. */
+  /** Attendance from our server's logtime sessions: preferred over intra's (often glitchy) numbers. */
+  serverWeeks?: Week[];
+  /** Attendance from intra's raw logtime, when neither the server nor goals have it. */
   logWeeks?: Week[];
   pace?: PaceProfile;
   coal?: Awaited<ReturnType<typeof fetchCoalition>>;
@@ -123,11 +125,18 @@ export function mountHero() {
     state.data = readHero() ?? state.data;
     Object.assign(state, { goals, coal, goalsLoaded: true });
     paint();
-    if (!goals?.edtrax_weeks?.length && !state.logWeeks) {
+    if (!state.serverWeeks && !goals?.edtrax_weeks?.length && !state.logWeeks && !(await serverWeeks)) {
       state.logWeeks = (await fetchLogtimeWeeks(state.data.login)) ?? [];
       paint();
     }
   };
+  // Attendance from our server (every session, all time), when it has them.
+  const serverWeeks = fetchLogtimeSessions(data.login).then((sessions) => {
+    if (!sessions) return false;
+    state.serverWeeks = weeksFromSessions(sessions);
+    paint();
+    return true;
+  }, () => false);
   refresh();
   fetchPiscine(data.login).then(async (piscine) => {
     if (piscine) state.piscine = piscine;
@@ -367,7 +376,7 @@ function togetherHtml(login: string, t?: EvalStats['together']) {
   return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
 }
 
-function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace, coal, piscine, piscineLabel, evals, banner, irUser }: State) {
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, serverWeeks, logWeeks, pace, coal, piscine, piscineLabel, evals, banner, irUser }: State) {
   // Coalition look for the selected cursus. Until that cursus's data has loaded, keep showing the
   // previous one as a whole (intra's banner may be half-switched), never a mix of the two.
   const c = goalsLoaded
@@ -406,7 +415,8 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
   const C = 2 * Math.PI * 18;
 
   // ── attendance: W-4 … last week ──
-  const weeks = [...(goals?.edtrax_weeks?.length ? goals.edtrax_weeks : (logWeeks ?? []))].reverse();
+  // Ours (from the server's sessions) first; intra's attendance, then its raw logtime, otherwise.
+  const weeks = [...(serverWeeks ?? (goals?.edtrax_weeks?.length ? goals.edtrax_weeks : (logWeeks ?? [])))].reverse();
   const weeksPending = !weeks.length && !(goalsLoaded && logWeeks);
   const maxW = Math.max(40, ...weeks.map((w) => w.hours));
   const wkLabel = (n: string) => (/last/i.test(n) ? 'Last' : n);
@@ -494,7 +504,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, logWeeks, pace
           ${weeks.length ? `<div class="pair">
             <div><div class="big">${weeks.at(-1)!.hours}<small>h</small></div><div class="sub">last week</div></div>
             <div class="att">
-              <div class="bars">${weeks.map((w) => `<div data-tip="${esc(wkLabel(w.name))}: ${w.hours}h · ${esc(w.text)}"><span style="height:${(w.hours / maxW) * 100}%"></span></div>`).join('')}</div>
+              <div class="bars">${weeks.map((w) => `<div data-tip="${esc(wkLabel(w.name))}: ${w.text.startsWith(`${w.hours}h`) ? esc(w.text) : `${w.hours}h · ${esc(w.text)}`}"><span style="height:${(w.hours / maxW) * 100}%"></span></div>`).join('')}</div>
               <div class="bars-x">${weeks.map((w) => `<span>${esc(wkLabel(w.name))}</span>`).join('')}</div>
             </div>
           </div>` : weeksPending ? '<div class="skeleton"></div>' : '<div class="big muted">—</div><div class="sub">No logtime available</div>'}
