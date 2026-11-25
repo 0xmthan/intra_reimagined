@@ -192,6 +192,34 @@ export class Db {
         logins       jsonb not null,
         refreshed_at timestamptz not null default now()
       )`;
+    // Profile views (`viewer` opened `viewed`'s profile), kept for VIEW_LOG_DAYS, asked for by 42 staff.
+    await this.#sql`
+      create table if not exists profile_views (
+        id        bigserial primary key,
+        viewer    text not null,
+        viewed    text not null,
+        viewed_at timestamptz not null default now()
+      )`;
+    await this.#sql`create index if not exists profile_views_viewed on profile_views (viewed, viewed_at)`;
+    await this.#sql`create index if not exists profile_views_at on profile_views (viewed_at)`;
+  }
+
+  async logProfileView(viewer: string, viewed: string) {
+    await this.#sql`insert into profile_views (viewer, viewed) values (${viewer}, ${viewed})`;
+  }
+
+  /** Newest profile views first, optionally only those by `viewer` and/or of `viewed`. */
+  async listProfileViews(q: { viewer?: string; viewed?: string; limit: number }) {
+    return this.#sql<{ viewer: string; viewed: string; viewedAt: Date }[]>`
+      select viewer, viewed, viewed_at as "viewedAt" from profile_views
+      where (${q.viewer ?? null}::text is null or viewer = ${q.viewer ?? null})
+        and (${q.viewed ?? null}::text is null or viewed = ${q.viewed ?? null})
+      order by viewed_at desc limit ${q.limit}`;
+  }
+
+  /** Deletes profile views older than `days`. */
+  async pruneProfileViews(days: number) {
+    await this.#sql`delete from profile_views where viewed_at < now() - make_interval(days => ${days})`;
   }
 
   /** When `login`'s full history was last synced; undefined = never fetched. */

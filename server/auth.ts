@@ -92,13 +92,13 @@ export class Auth {
     return false;
   }
 
-  /** Where a login may return to: an intra page, or our own /friends page (never an open redirect). */
+  /** Where a login may return to: an intra page, or our own /friends or /staff page (never an open redirect). */
   #backUrl(s: string | null): URL | undefined {
     const intra = intraUrl(s);
     if (intra) return intra;
     try {
       const u = new URL(s ?? '');
-      return u.origin === this.#origin && u.pathname === '/friends' ? u : undefined;
+      return u.origin === this.#origin && (u.pathname === '/friends' || u.pathname === '/staff') ? u : undefined;
     } catch {
       return undefined;
     }

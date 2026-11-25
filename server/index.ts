@@ -39,6 +39,7 @@ import { EvalService } from './evals.ts';
 import { LogtimeService } from './logtime.ts';
 import { FriendStatsService } from './friend-stats.ts';
 import { serveFriendsPage } from './friends-page.ts';
+import { serveStaffPage } from './staff-page.ts';
 import { MONTHS, PiscineService } from './piscines.ts';
 import { serveRelease } from './releases.ts';
 import { Auth } from './auth.ts';
@@ -85,6 +86,17 @@ const auth = new Auth(FT_UID, FT_SECRET, AUTH_SECRET, PUBLIC_URL);
 
 const db = process.env.DATABASE_URL ? new Db(process.env.DATABASE_URL) : undefined;
 if (db) await db.init();
+
+// 42 logins allowed to read the profile view log (/staff), comma-separated.
+const STAFF_LOGINS = (process.env.STAFF_LOGINS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+// Profile view log retention: prune at start and once a day.
+const VIEW_LOG_DAYS = 90;
+if (db) {
+  const prune = () => db.pruneProfileViews(VIEW_LOG_DAYS).catch((e) => console.error(e));
+  prune();
+  setInterval(prune, DAY).unref();
+}
 else console.warn('No DATABASE_URL: data is only cached in memory.');
 const evals = new EvalService(api, db);
 const logtime = new LogtimeService(api, db);
@@ -238,6 +250,7 @@ const server = createServer(async (req, res) => {
   }
   if (serveRelease(url.pathname, req, res)) return;
   if (serveFriendsPage(url.pathname, res)) return;
+  if (serveStaffPage(url.pathname, res)) return;
   if (url.pathname === '/health') {
     try {
       await db?.ping();
@@ -362,6 +375,25 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  if (url.pathname === '/v1/staff/views') {
+    const me = signedIn(req);
+    if (!me) return send(res, 401, { error: 'login with 42 required' });
+    if (!STAFF_LOGINS.includes(me)) return send(res, 403, { error: 'staff only' });
+    if (!db) return send(res, 503, { error: 'the view log needs the database' });
+    const pick = (k: string) => {
+      const v = url.searchParams.get(k)?.trim().toLowerCase();
+      return v && /^[a-z0-9-]{1,32}$/.test(v) ? v : undefined;
+    };
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 200, 1), 1000);
+    try {
+      const views = await db.listProfileViews({ viewer: pick('viewer'), viewed: pick('viewed'), limit });
+      return send(res, 200, { views }, { 'Cache-Control': 'no-store' });
+    } catch (e) {
+      console.error(e);
+      return send(res, 500, { error: 'could not read the view log' });
+    }
+  }
+
   const irOf = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/ir$/i);
   if (irOf || url.pathname === '/v1/me/ir') {
     const me = signedIn(req);
@@ -380,6 +412,7 @@ const server = createServer(async (req, res) => {
     try {
       if (irOf) {
         const login = irOf[1].toLowerCase();
+        if (login !== me) db.logProfileView(me, login).catch((e) => console.error(e));
         const row = await db.getIrUser(login);
         // Someone who hid it still sees their own state (for the settings toggle).
         const theme = row && { mode: row.mode ?? 'dark', accent: row.accent ?? 'default' };
