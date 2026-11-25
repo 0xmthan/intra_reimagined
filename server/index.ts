@@ -49,7 +49,7 @@ import { CampusEvents } from './events.ts';
 
 // Theme choices the extension offers (src/theme.ts MODES / ACCENTS).
 const MODES = ['dark', 'light'];
-const ACCENTS = ['default', 'green'];
+const ACCENTS = ['default', 'green', 'coalition'];
 import { BannerError, MAX_BYTES, MIME, bannerPath, processUpload, readBody, serveBanner, type ImageType } from './banners.ts';
 
 const envFile = new URL('.env', import.meta.url);

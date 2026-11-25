@@ -3,8 +3,8 @@
 import { setHTML } from './html';
 import { myLogin } from './me';
 import { installUrl, updateInfo } from './update';
-import { fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
-import { ACCENTS, MODES, currentAccent, currentMode, setPref } from './theme';
+import { fetchCoalition, fetchIrUser, saveIrHidden, saveIrTheme } from './profile/data';
+import { ACCENTS, MODES, coalitionColor, currentAccent, currentMode, rememberCoalitionColor, setPref } from './theme';
 
 /** The installed version, from the manifest (vite.config.ts copies it from package.json). */
 const VERSION = ((globalThis as { browser?: { runtime: { getManifest(): { version: string } } } }).browser ??
@@ -92,7 +92,18 @@ function addThemePicker(section: HTMLElement) {
   };
   // Saved on the server too, so it follows you to other devices (and visitors can see it).
   group('Mode', MODES, currentMode(), (id) => { void setPref('mode', id); void saveIrTheme({ mode: id }); }, '', 'mode');
-  group('Accent', ACCENTS, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
+  const accents = ACCENTS.map((a) => (a.id === 'coalition' ? { ...a, color: coalitionColor() ?? a.color } : a));
+  group('Accent', accents, currentAccent(), (id) => { void setPref('accent', id); void saveIrTheme({ accent: id }); }, '<span class="ir-themes-soon">// more soon</span>');
+
+  // Coalition color not seen yet (your profile wasn't opened since install): ask intra for it.
+  const me = myLogin();
+  if (!coalitionColor() && me) {
+    fetchCoalition(me, '42cursus').then((c) => {
+      rememberCoalitionColor(c?.color);
+      const sw = section.querySelector<HTMLElement>('.ir-theme[data-id="coalition"] .ir-theme-swatch');
+      if (c?.color && sw) sw.style.setProperty('--sw', c.color);
+    });
+  }
 }
 
 /** A checkbox saved on the server; flips back with the error if saving fails. */
