@@ -4,7 +4,13 @@
 set -euo pipefail
 cd "$HOME/$1"
 tag=$2
-image=$(docker compose config --images app | sed 's/:[^:/]*$//')
+# The app's image without its tag, from the line `image: <name>:${SERVER_TAG:-latest}` in the new compose file.
+image=$(sed -n 's/^ *image: *\(.*\):\${SERVER_TAG.*/\1/p' docker-compose.yml.new)
+if [ -z "$image" ]; then
+  echo "::error::no 'image: …:\${SERVER_TAG…}' line in docker-compose.yml"
+  rm -f docker-compose.yml.new
+  exit 1
+fi
 
 # What's running now, kept under a local tag so a rollback never depends on the registry.
 if prev=$(docker inspect -f '{{.Image}}' intra-reimagined-app 2>/dev/null); then
