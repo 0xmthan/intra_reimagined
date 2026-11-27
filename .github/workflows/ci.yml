@@ -1,0 +1,256 @@
+# One pipeline for the whole repo. Heavy work runs on GitHub's runners; digi (1 CPU, 1 GB) only
+# runs the small "put it live" steps, on a self-hosted runner labelled `digi` (~/actions-runner there).
+#
+#   every push and pull request     checks: lockfiles, typecheck, build, web-ext lint, audit, server image
+#   push to master, src changed     + release: patch bump, AMO signing, commit + tag   (GitHub)
+#                                     publish: signed files into digi's releases folder (digi)
+#   push to master, server changed  + image: build and push to ghcr.io                 (GitHub)
+#                                     deploy: pull and start it, roll back if unhealthy (digi)
+#
+# Secrets: WEB_EXT_API_KEY, WEB_EXT_API_SECRET (AMO API credentials).
+# digi's runner must only ever see master: its jobs are gated on refs/heads/master, and pull requests
+# from forks need approval before any workflow runs (repo Settings → Actions → General).
+# Manual runs (Actions → ci → Run workflow) can force either deploy and pick the version bump.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_extension:
+        description: Release the extension
+        type: boolean
+        default: false
+      bump:
+        description: Version bump (patch, minor, major or x.y.z)
+        default: patch
+      deploy_server:
+        description: Build and deploy the server
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  PUBLIC_URL: https://intra.mthan.dev
+  APP_DIR: Documents/intra-reimagined # on digi, under the runner user's home
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      extension: ${{ steps.filter.outputs.extension }}
+      server: ${{ steps.filter.outputs.server }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            extension:
+              - 'src/**'
+              - 'public/**'
+              - 'vite.config.ts'
+              - 'tsconfig.json'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.env'
+            server:
+              - 'server/**'
+              - '.github/deploy-server.sh'
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # version from package.json's packageManager
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            server/pnpm-lock.yaml
+
+      - name: Install (lockfiles must be up to date)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir server install --frozen-lockfile
+
+      - name: Typecheck (extension + server)
+        run: pnpm typecheck
+
+      - name: Build the extension
+        run: pnpm build
+
+      - name: Lint the extension (Mozilla's add-on linter)
+        run: pnpm exec web-ext lint -s dist --self-hosted --warnings-as-errors
+
+      - name: Audit dependencies
+        run: |
+          pnpm audit --audit-level moderate
+          pnpm --dir server audit --audit-level moderate
+
+      - name: Server starts and answers /health
+        run: |
+          docker build -t ir-server-check server
+          docker run -d --name ir-server-check -p 8787:8787 ir-server-check
+          for i in $(seq 20); do curl -fs http://127.0.0.1:8787/health && exit 0; sleep 1; done
+          docker logs ir-server-check
+          exit 1
+
+  # ---------- extension ----------
+
+  release:
+    needs: [changes, check]
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      ((github.event_name == 'push' && needs.changes.outputs.extension == 'true' &&
+        !startsWith(github.event.head_commit.message, 'release ')) ||
+       (github.event_name == 'workflow_dispatch' && inputs.release_extension))
+    runs-on: ubuntu-latest
+    concurrency: release-extension # never two releases at once (AMO versions must not collide)
+    environment: production
+    permissions:
+      contents: write # pushes the version bump and its tag
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Bump, build and sign on AMO
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+          IR_UPDATES_BASE: ${{ env.PUBLIC_URL }}
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: pnpm release "$BUMP" --no-publish
+
+      - id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: extension-${{ steps.version.outputs.version }}
+          path: |
+            release/intra-reimagined-${{ steps.version.outputs.version }}.xpi
+            release/intra-reimagined-${{ steps.version.outputs.version }}-chrome.zip
+            release/updates.json
+          if-no-files-found: error
+
+      - name: Commit and tag the new version
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "release $V"
+          git tag "v$V"
+          # master may have moved while AMO was reviewing: replay the bump on top of it.
+          for i in 1 2 3; do
+            git pull --rebase origin master && git push origin HEAD:master "v$V" && exit 0
+            sleep 5
+          done
+          exit 1
+
+  publish:
+    needs: release
+    runs-on: digi
+    concurrency: release-extension-publish
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: extension-${{ needs.release.outputs.version }}
+          path: incoming
+
+      - name: Into the releases folder (files first, then the updates.json that points at them)
+        env:
+          V: ${{ needs.release.outputs.version }}
+        run: |
+          dest="$HOME/$APP_DIR/releases"
+          cp incoming/intra-reimagined-$V.xpi incoming/intra-reimagined-$V-chrome.zip "$dest/"
+          cp incoming/updates.json "$dest/updates.json.tmp" && mv "$dest/updates.json.tmp" "$dest/updates.json"
+          rm -rf incoming
+
+      - name: Check it's live
+        env:
+          V: ${{ needs.release.outputs.version }}
+        run: curl -fs "$PUBLIC_URL/updates.json" | grep -q "\"$V\""
+
+  # ---------- server ----------
+
+  image:
+    needs: [changes, check]
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      ((github.event_name == 'push' && needs.changes.outputs.server == 'true') ||
+       (github.event_name == 'workflow_dispatch' && inputs.deploy_server))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Image name (lowercase, as the registry requires)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/intra-reimagined-server" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # :sha-<commit> is what gets deployed (and rolled back to); :latest follows it.
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Intra Reimagined API server
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    runs-on: digi
+    concurrency: deploy-server
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            server/docker-compose.yml
+            .github/deploy-server.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Pull and start the new image (rolls back if it isn't healthy)
+        run: |
+          cp server/docker-compose.yml "$HOME/$APP_DIR/docker-compose.yml.new"
+          bash .github/deploy-server.sh "$APP_DIR" "sha-$GITHUB_SHA"
+
+      - name: Check it's live
+        run: |
+          for i in $(seq 10); do curl -fs "$PUBLIC_URL/health" && exit 0; sleep 3; done
+          exit 1

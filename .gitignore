@@ -8,3 +8,4 @@ release/
 server/.env
 .release-signed/
 .release-chrome/
+web-ext-config.mjs

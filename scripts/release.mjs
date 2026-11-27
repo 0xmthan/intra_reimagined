@@ -3,6 +3,8 @@
 //   pnpm release [patch|minor|major|<x.y.z>]   sign on AMO ("unlisted": not shown on AMO) and publish
 //                                              the signed .xpi + updates.json on our server
 //   pnpm package [patch|minor|major|<x.y.z>]   only write the zips to release/ (no signing)
+//   pnpm release … --no-publish                sign and write updates.json to release/, but don't
+//                                              copy anything to the server (CI publishes it from digi)
 //
 // Users install https://intra.mthan.dev/install once; after that Firefox updates them from
 // https://intra.mthan.dev/updates.json (manifest update_url), checked hourly by background.ts.
@@ -12,21 +14,24 @@
 // .env.release (gitignored):
 //   WEB_EXT_API_KEY, WEB_EXT_API_SECRET  AMO API credentials (addons.mozilla.org/developers/addon/api/key/)
 //   IR_UPDATES_BASE   public base URL of the server       (default https://intra.mthan.dev)
-//   IR_DEPLOY         scp target for the releases folder   (default syn-local:Documents/intra-reimagined/releases)
+//   IR_DEPLOY         scp target for the releases folder, e.g. myhost:path/to/releases (needed to publish)
+//
+// On master, CI runs this (with --no-publish) for every extension change (.github/workflows/ci.yml).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const manual = process.argv.includes('--manual');
+const publish = !process.argv.includes('--no-publish');
 const bump = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 'patch';
 
 if (existsSync('.env.release')) process.loadEnvFile('.env.release');
 const BASE = (process.env.IR_UPDATES_BASE || 'https://intra.mthan.dev').replace(/\/+$/, '');
-const DEPLOY = process.env.IR_DEPLOY || 'syn-local:Documents/intra-reimagined/releases';
+const DEPLOY = process.env.IR_DEPLOY;
 const ADDON_ID = JSON.parse(readFileSync('public/manifest.json', 'utf8')).browser_specific_settings.gecko.id;
 
-const missing = ['WEB_EXT_API_KEY', 'WEB_EXT_API_SECRET'].filter((k) => !process.env[k]);
+const missing = ['WEB_EXT_API_KEY', 'WEB_EXT_API_SECRET', ...(publish ? ['IR_DEPLOY'] : [])].filter((k) => !process.env[k]);
 if (!manual && missing.length) {
   console.error(`Missing ${missing.join(', ')} (set them in .env.release), or use \`pnpm package\`.`);
   process.exit(1);
@@ -128,6 +133,11 @@ entry.updates.push({
   update_hash: `sha256:${createHash('sha256').update(readFileSync(xpi)).digest('hex')}`,
 });
 writeFileSync('release/updates.json', JSON.stringify(updates, null, 2) + '\n');
+
+if (!publish) {
+  console.log(`\nSigned ${version}, not published:\n  ${resolve(xpi)}\n  ${resolve(chrome)}\n  ${resolve('release/updates.json')}`);
+  process.exit(0);
+}
 
 // 5. Publish: the .xpi first, then the updates.json that points at it.
 const [host, dir] = DEPLOY.split(':');
