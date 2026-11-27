@@ -100,7 +100,10 @@ jobs:
       - name: Server starts and answers /health
         run: |
           docker build -t ir-server-check server
-          docker run -d --name ir-server-check -p 8787:8787 ir-server-check
+          # Dummy credentials: it only has to boot (no database, no calls to 42).
+          docker run -d --name ir-server-check -p 8787:8787 \
+            -e FT_UID=ci -e FT_SECRET=ci -e AUTH_SECRET="$(openssl rand -hex 32)" -e PUBLIC_URL=http://127.0.0.1:8787 \
+            ir-server-check
           for i in $(seq 20); do curl -fs http://127.0.0.1:8787/health && exit 0; sleep 1; done
           docker logs ir-server-check
           exit 1
