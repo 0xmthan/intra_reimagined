@@ -66,6 +66,8 @@ interface State {
   banner?: string | null;
   /** They use Intra Reimagined (and didn't hide it): shows the badge next to the name. */
   irUser?: boolean;
+  /** The "evaluations together" list is unfolded. */
+  togetherOpen?: boolean;
 }
 
 // Last known custom banner per login, so it shows from the first paint instead of swapping in
@@ -188,6 +190,10 @@ export function mountHero() {
   // Piscine chip → everyone from that piscine; "Connect" → login with 42 for our server.
   hero.addEventListener('click', (e) => {
     if ((e.target as Element).closest('[data-act="connect"]')) return void connect();
+    if ((e.target as Element).closest('[data-act="together"]')) {
+      state.togetherOpen = !state.togetherOpen;
+      return void paint();
+    }
     if ((e.target as Element).closest('[data-act="banner"]')) {
       return void openBannerEditor({
         current: state.banner ?? null,
@@ -362,21 +368,30 @@ function spanHtml(fromMs: number, toMs: number) {
 }
 
 /** "You and ybarut had 4 evaluations together", with the split on hover. */
-function togetherHtml(login: string, t?: EvalStats['together']) {
+function togetherHtml(login: string, t?: EvalStats['together'], open = false) {
   if (!t) return '';
   const n = t.youEvaluatedThem + t.theyEvaluatedYou;
   if (!n) return `<div class="together muted">You and ${esc(login)} haven't evaluated each other yet</div>`;
   const times = (k: number) => (k === 1 ? 'once' : k === 2 ? 'twice' : `${k} times`);
   const you = t.youEvaluatedThem ? `You evaluated them ${times(t.youEvaluatedThem)}` : 'You never evaluated them';
   const they = t.theyEvaluatedYou ? `they evaluated you ${times(t.theyEvaluatedYou)}` : 'they never evaluated you';
-  // Then each evaluation on a line of its own, newest first: the project, who evaluated whom, when.
   const when = (at: number) => new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const lines = t.evals.map((e) => `${e.project} · ${e.you ? 'you evaluated them' : 'they evaluated you'} · ${when(e.at)}`);
-  const tip = esc([`${you} · ${they}`, ...lines].join('\n'));
-  return `<div class="together" data-tip="${tip}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together</div>`;
+  const me = myLogin();
+  // The evaluated one is them when you were the evaluator, you otherwise.
+  const href = (e: NonNullable<EvalStats['together']>['evals'][number]) => {
+    const who = e.you ? login : me;
+    return e.slug && who ? `https://projects.intra.42.fr/${encodeURIComponent(e.slug)}/${encodeURIComponent(who)}` : '';
+  };
+  const rows = t.evals.map((e) => {
+    const url = href(e);
+    const inner = `<span class="tg-proj">${esc(e.project)}</span><span class="tg-dir">${e.you ? 'you evaluated them' : 'they evaluated you'}</span><span class="tg-when">${when(e.at)}</span>`;
+    return url ? `<a class="tg-row" href="${esc(url)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="tg-row">${inner}</div>`;
+  });
+  const list = open && rows.length ? `<div class="tg-list">${rows.join('')}</div>` : '';
+  return `<button type="button" class="together btn-plain" data-act="together" aria-expanded="${open}" data-tip="${esc(`${you} · ${they}`)}">You and <b>${esc(login)}</b> had <b>${n}</b> evaluation${n === 1 ? '' : 's'} together <span class="tg-caret">${open ? '▴' : '▾'}</span></button>${list}`;
 }
 
-function render(hero: HTMLElement, { data: d, goals, goalsLoaded, serverWeeks, logWeeks, pace, coal, piscine, piscineLabel, evals, banner, irUser }: State) {
+function render(hero: HTMLElement, { data: d, goals, goalsLoaded, serverWeeks, logWeeks, pace, coal, piscine, piscineLabel, evals, banner, irUser, togetherOpen }: State) {
   // Coalition look for the selected cursus. Until that cursus's data has loaded, keep showing the
   // previous one as a whole (intra's banner may be half-switched), never a mix of the two.
   const c = goalsLoaded
@@ -525,7 +540,7 @@ function render(hero: HTMLElement, { data: d, goals, goalsLoaded, serverWeeks, l
               </div>
             </div>` : ''}
           </div>
-          ${togetherHtml(d.login, evals.together)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
+          ${togetherHtml(d.login, evals.together, togetherOpen)}` : evals === null ? '<div class="big muted">—</div><div class="sub">Not available right now</div>' : '<div class="skeleton"></div>'}
         </div>
         <div class="card deadline ${danger ? 'danger' : ''}${frozen ? ' frozen' : ''}${bh ? ' bh' : ''}">
           ${bh ? `<canvas class="bh-canvas" aria-hidden="true" data-days="${bh.days}" data-gone="${bh.gone ? 1 : 0}"></canvas>` : ''}
