@@ -1,6 +1,7 @@
 // Postgres store for data that never changes (a student's piscine), so each login hits the
 // 42 API once, ever, even across restarts.
 import postgres from 'postgres';
+import type { Outstanding } from './outstanding.ts';
 
 export interface Piscine {
   login: string;
@@ -219,6 +220,7 @@ export class Db {
         projects     jsonb not null,
         refreshed_at timestamptz not null default now()
       )`;
+    await this.#sql`alter table outstanding add column if not exists givers jsonb`;
     // Up to two achievements each student pins on their Achievements card (by name).
     await this.#sql`
       create table if not exists achievement_pins (
@@ -395,16 +397,16 @@ export class Db {
     await this.#sql`delete from banners where login = ${login}`;
   }
 
-  async getOutstanding(login: string): Promise<{ login: string; projects: Record<string, number>; refreshedAt: Date } | undefined> {
-    const [row] = await this.#sql<{ login: string; projects: Record<string, number>; refreshedAt: Date }[]>`
-      select login, projects, refreshed_at as "refreshedAt" from outstanding where login = ${login}`;
-    return row;
+  async getOutstanding(login: string): Promise<Outstanding | undefined> {
+    const [row] = await this.#sql<(Omit<Outstanding, 'givers'> & { givers: Outstanding['givers'] | null })[]>`
+      select login, projects, givers, refreshed_at as "refreshedAt" from outstanding where login = ${login}`;
+    return row && { ...row, givers: row.givers ?? undefined };
   }
 
-  async saveOutstanding(login: string, projects: Record<string, number>) {
+  async saveOutstanding(login: string, projects: Record<string, number>, givers: Record<string, string[]>) {
     await this.#sql`
-      insert into outstanding (login, projects) values (${login}, ${this.#sql.json(projects)})
-      on conflict (login) do update set projects = excluded.projects, refreshed_at = now()`;
+      insert into outstanding (login, projects, givers) values (${login}, ${this.#sql.json(projects)}, ${this.#sql.json(givers)})
+      on conflict (login) do update set projects = excluded.projects, givers = excluded.givers, refreshed_at = now()`;
   }
 
   async getPins(login: string): Promise<string[]> {
