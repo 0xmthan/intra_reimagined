@@ -4,6 +4,7 @@
 // it looks and behaves as on the profile page. Follows intra's cursus select like the rest of the card.
 import { myLogin } from '../me';
 import { fetchOutstanding, fetchProfilePage } from './data';
+import { addTooltip } from '../tooltip';
 
 const LIST_ID = 'ir-home-marks';
 const REC_ID = 'ir-home-recommended';
@@ -224,7 +225,8 @@ export function appendMarks(list: HTMLElement, marks: Element, login?: string) {
   if (login) void addOutstanding(section, login);
 }
 
-/** A ★ per "Outstanding project" flag a project got (from our server), in place of its mark's ✓. */
+/** A ★ per "Outstanding project" flag a project got (from our server), in place of its mark's ✓;
+ * hovering it says who gave them. */
 async function addOutstanding(section: HTMLElement, login: string) {
   const counts = await fetchOutstanding(login);
   if (!counts) return;
@@ -234,12 +236,13 @@ async function addOutstanding(section: HTMLElement, login: string) {
     const slug = row.classList.contains('main-project-item') && !row.classList.contains('parent-item') ? row.dataset.project : href.match(/\/projects\/([^/]+)\/projects_users\//)?.[1];
     // A project's attempts (#0, #1…) would only repeat its total: counted per project, not per try.
     if (!row.classList.contains('main-project-item') && !row.classList.contains('parent')) continue;
-    const n = slug ? counts[slug] : 0;
+    const { n = 0, by = [] } = (slug && counts[slug]) || {};
     if (!n || row.querySelector('.ir-outstanding')) continue;
     const star = document.createElement('span');
     star.className = 'ir-outstanding';
     star.textContent = '★'.repeat(Math.min(n, 5)); // one per flag (5 at most)
-    star.title = `${n} outstanding flag${n === 1 ? '' : 's'}`;
+    const what = `${n} outstanding flag${n === 1 ? '' : 's'}`;
+    addTooltip(star, by.length ? [`${what} from`, by.join(', ')] : what, { style: 'v3' });
     // In place of the mark's ✓ (its icon-font glyph is hidden), right before the number.
     const mark = row.querySelector(':scope > .pull-right, :scope > .marked-title > .pull-right');
     if (mark) {
