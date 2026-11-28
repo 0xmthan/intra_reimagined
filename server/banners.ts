@@ -160,14 +160,17 @@ export function stripMetadata(type: ImageType, b: Buffer): Buffer {
   }
 }
 
-/** Validates an upload and returns what to store. Throws BannerError with a user-facing message. */
-export function processUpload(raw: Buffer): { type: ImageType; data: Buffer; hash: string } {
+/**
+ * Validates an upload and returns what to store. Throws BannerError with a user-facing message.
+ * Banners have a minimum size; comment images (comments.ts) pass 1×1.
+ */
+export function processUpload(raw: Buffer, min = { width: MIN_WIDTH, height: MIN_HEIGHT }): { type: ImageType; data: Buffer; hash: string } {
   const type = sniff(raw);
   if (!type) throw new BannerError(415, 'Only PNG, JPEG, GIF or WebP images.');
   const { width, height } = dimensions(type, raw);
   if (!width || !height || width > MAX_SIDE || height > MAX_SIDE || width * height > MAX_PIXELS)
     throw bad(`Too large: ${width}×${height}. Keep it within ${MAX_SIDE}px a side and ${Math.round(MAX_PIXELS / 1e6)} megapixels.`);
-  if (width < MIN_WIDTH || height < MIN_HEIGHT) throw bad(`Too small: ${width}×${height}. At least ${MIN_WIDTH}×${MIN_HEIGHT}.`);
+  if (width < min.width || height < min.height) throw bad(`Too small: ${width}×${height}. At least ${min.width}×${min.height}.`);
   const data = stripMetadata(type, raw);
   return { type, data, hash: createHash('sha256').update(data).digest('hex') };
 }
@@ -202,17 +205,16 @@ export function readBody(req: IncomingMessage, max: number): Promise<Buffer> {
   });
 }
 
-export const bannerPath = (hash: string, type: ImageType) => `/banners/${hash}.${EXT[type]}`;
+export const bannerPath = (hash: string, type: ImageType, dir = 'banners') => `/${dir}/${hash}.${EXT[type]}`;
 
-const PUBLIC = /^\/banners\/([a-f0-9]{64})\.(png|jpg|gif|webp)$/;
-
-/** /banners/<hash>.<ext> → the stored image, with headers that only ever let it be an image. */
+/** /<dir>/<hash>.<ext> (banners, comment-images) → the stored image, with headers that only ever let it be an image. */
 export async function serveBanner(
   pathname: string,
   res: ServerResponse,
   load: (hash: string) => Promise<{ type: ImageType; data: Buffer } | undefined>,
+  dir = 'banners',
 ): Promise<boolean> {
-  const m = pathname.match(PUBLIC);
+  const m = pathname.startsWith(`/${dir}/`) ? pathname.slice(dir.length + 1).match(/^\/([a-f0-9]{64})\.(png|jpg|gif|webp)$/) : null;
   if (!m) return false;
   const found = await load(m[1]);
   if (!found || EXT[found.type] !== m[2] || BY_EXT[m[2]] !== found.type) {

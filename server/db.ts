@@ -99,6 +99,26 @@ export interface IrUser {
   shareTheme: boolean;
 }
 
+/** Where a commenter stood on the project when they wrote (comments.ts). */
+export type Standing = { kind: 'validated' | 'failed'; mark: number } | { kind: 'doing' } | { kind: 'none' };
+
+/** One comment under a project page; `parent` = the comment it replies to (one level only). */
+export interface ProjectComment {
+  id: number;
+  parent: number | null;
+  login: string;
+  body: string;
+  standing: Standing;
+  /** How many times they had evaluated this project, as a corrector, when they wrote. */
+  evaluated: number;
+  at: Date;
+  editedAt: Date | null;
+  deleted: boolean;
+  helpful: number;
+  /** The viewer marked it helpful. */
+  voted: boolean;
+}
+
 export class Db {
   readonly #sql: postgres.Sql;
 
@@ -156,6 +176,42 @@ export class Db {
         updated_at timestamptz not null default now()
       )`;
     await this.#sql`create index if not exists banners_hash on banners (hash)`;
+    // Project comments (comments.ts): keyed by 42's project id, found from the page's slug once.
+    await this.#sql`
+      create table if not exists project_slugs (
+        slug text primary key,
+        id   integer not null,
+        name text not null
+      )`;
+    await this.#sql`
+      create table if not exists project_comments (
+        id         bigserial primary key,
+        project_id integer not null,
+        parent_id  bigint references project_comments (id),
+        login      text not null,
+        body       text not null,
+        standing   jsonb not null,
+        evaluated  integer not null default 0,
+        created_at timestamptz not null default now(),
+        edited_at  timestamptz,
+        deleted_at timestamptz
+      )`;
+    await this.#sql`create index if not exists project_comments_project on project_comments (project_id, created_at)`;
+    await this.#sql`
+      create table if not exists comment_votes (
+        comment_id bigint not null references project_comments (id),
+        login      text not null,
+        primary key (comment_id, login)
+      )`;
+    // Images in comments: served publicly by content hash, like banners.
+    await this.#sql`
+      create table if not exists comment_images (
+        hash       text primary key,
+        login      text not null,
+        type       text not null,
+        data       bytea not null,
+        created_at timestamptz not null default now()
+      )`;
     // Outstanding flags each student got, per project slug (outstanding.ts).
     await this.#sql`
       create table if not exists outstanding (
@@ -470,6 +526,65 @@ export class Db {
       insert into piscine_students (campus_id, year, month, students)
       values (${l.campusId}, ${l.year}, ${l.month}, ${this.#sql.json(l.students as unknown as postgres.JSONValue)})
       on conflict (campus_id, year, month) do update set students = excluded.students, refreshed_at = now()`;
+  }
+
+  // ---------- project comments (comments.ts) ----------
+
+  async getProjectSlug(slug: string): Promise<{ id: number; name: string } | undefined> {
+    const [row] = await this.#sql<{ id: number; name: string }[]>`select id, name from project_slugs where slug = ${slug}`;
+    return row;
+  }
+
+  async saveProjectSlug(slug: string, id: number, name: string) {
+    await this.#sql`insert into project_slugs (slug, id, name) values (${slug}, ${id}, ${name}) on conflict (slug) do update set id = excluded.id, name = excluded.name`;
+  }
+
+  async listComments(projectId: number, viewer: string): Promise<ProjectComment[]> {
+    return this.#sql<ProjectComment[]>`
+      select c.id::int as id, c.parent_id::int as parent, c.login, c.body, c.standing, c.evaluated,
+        c.created_at as at, c.edited_at as "editedAt", c.deleted_at is not null as deleted,
+        (select count(*)::int from comment_votes v where v.comment_id = c.id) as helpful,
+        exists (select 1 from comment_votes v where v.comment_id = c.id and v.login = ${viewer}) as voted
+      from project_comments c where c.project_id = ${projectId} order by c.created_at`;
+  }
+
+  async getComment(id: number): Promise<{ id: number; projectId: number; parent: number | null; login: string; deleted: boolean } | undefined> {
+    const [row] = await this.#sql<{ id: number; projectId: number; parent: number | null; login: string; deleted: boolean }[]>`
+      select id::int as id, project_id as "projectId", parent_id::int as parent, login, deleted_at is not null as deleted
+      from project_comments where id = ${id}`;
+    return row;
+  }
+
+  async addComment(c: { projectId: number; parent: number | null; login: string; body: string; standing: Standing; evaluated: number }): Promise<number> {
+    const [row] = await this.#sql<{ id: number }[]>`
+      insert into project_comments (project_id, parent_id, login, body, standing, evaluated)
+      values (${c.projectId}, ${c.parent}, ${c.login}, ${c.body}, ${this.#sql.json(c.standing as unknown as postgres.JSONValue)}, ${c.evaluated})
+      returning id::int as id`;
+    return row.id;
+  }
+
+  async editComment(id: number, body: string) {
+    await this.#sql`update project_comments set body = ${body}, edited_at = now() where id = ${id} and deleted_at is null`;
+  }
+
+  /** Kept as a "deleted" placeholder (its replies stay under it); the text is gone for good. */
+  async deleteComment(id: number) {
+    await this.#sql`update project_comments set body = '', deleted_at = now() where id = ${id}`;
+    await this.#sql`delete from comment_votes where comment_id = ${id}`;
+  }
+
+  async voteComment(id: number, login: string, on: boolean) {
+    if (on) await this.#sql`insert into comment_votes (comment_id, login) values (${id}, ${login}) on conflict do nothing`;
+    else await this.#sql`delete from comment_votes where comment_id = ${id} and login = ${login}`;
+  }
+
+  async saveCommentImage(hash: string, login: string, type: string, data: Buffer) {
+    await this.#sql`insert into comment_images (hash, login, type, data) values (${hash}, ${login}, ${type}, ${data}) on conflict (hash) do nothing`;
+  }
+
+  async getCommentImage(hash: string): Promise<{ type: string; data: Buffer } | undefined> {
+    const [row] = await this.#sql<{ type: string; data: Buffer }[]>`select type, data from comment_images where hash = ${hash}`;
+    return row;
   }
 
   async ping() {

@@ -22,7 +22,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       PUBLIC_URL: ${PUBLIC_URL}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://profile.intra.42.fr}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://profile.intra.42.fr,https://projects.intra.42.fr}
+      ADMIN_LOGINS: ${ADMIN_LOGINS:-} # can delete anyone's project comment
       TRUST_PROXY: '1' # requests arrive through the tunnel
     volumes:
       - ./releases:/app/releases:ro # signed .xpi files + updates.json (pnpm release copies them here)

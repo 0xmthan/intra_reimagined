@@ -28,6 +28,8 @@
 //   GET /v1/me/friends/stats?week=<ms>  →  { friends: { login: { name, image, photo, seat, level, wallet,
 //                                     evalPoints, at, hours?: { week, total, at, last? } } } }: the friends panel's stats
 //                                     (last: ms when last logged in on campus)
+//   GET|POST /v1/projects/:slug/comments, PUT|DELETE /v1/comments/:id[/helpful], POST /v1/comment-images,
+//     GET /comment-images/<hash>.<ext>  →  student comments under project pages (comments.ts)
 //   GET /install, /updates.json, /xpi/<file>, /chrome/<file>  →  extension installs and updates (releases.ts)
 //   GET /friends                      →  your friends list on the web, for phones (friends-page.ts)
 //
@@ -52,6 +54,7 @@ import { OutstandingService } from './outstanding.ts';
 import { CampusMembers } from './campus.ts';
 import { CampusMilestones } from './milestones.ts';
 import { CampusEvents } from './events.ts';
+import { CommentService, IMAGE_DIR, isCommentRoute } from './comments.ts';
 
 // Theme choices the extension offers (src/theme.ts MODES / ACCENTS).
 const MODES = ['dark', 'light'];
@@ -74,7 +77,7 @@ if (!AUTH_SECRET || AUTH_SECRET.length < 32 || !PUBLIC_URL) {
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST || '127.0.0.1';
 // Content scripts fetch with the intra page's origin, so these are the origins CORS has to allow.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://profile.intra.42.fr')
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://profile.intra.42.fr,https://projects.intra.42.fr')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -106,6 +109,9 @@ const family = new FamilyService(api, db);
 const campusMembers = new CampusMembers(api, db);
 const campusMilestones = new CampusMilestones(api, db);
 const campusEvents = new CampusEvents(api);
+// ADMIN_LOGINS (comma-separated) can delete anyone's comment; everyone else only their own.
+const admins = (process.env.ADMIN_LOGINS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+const comments = db ? new CommentService(api, db, evals, admins, send) : undefined;
 
 async function getPiscine(login: string): Promise<Piscine | null> {
   const hit = piscineCache.get(login);
@@ -231,15 +237,20 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Methods': 'GET, PUT, DELETE',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Max-Age': '86400',
     });
     return res.end();
   }
-  // Only the banner, pins, badge and friends routes take writes; everything else is read-only.
+  // Only the banner, pins, badge, friends and comment routes take writes; everything else is read-only.
   const write = req.method === 'PUT' || req.method === 'DELETE';
-  if (req.method !== 'GET' && !(write && (url.pathname === '/v1/me/banner' || url.pathname === '/v1/me/pins' || url.pathname === '/v1/me/ir' || /^\/v1\/me\/friends\/[a-z0-9-]{1,32}$/i.test(url.pathname)))) {
+  const commentRoute = isCommentRoute(url.pathname);
+  if (
+    req.method !== 'GET' &&
+    !(commentRoute && (write || req.method === 'POST')) &&
+    !(write && (url.pathname === '/v1/me/banner' || url.pathname === '/v1/me/pins' || url.pathname === '/v1/me/ir' || /^\/v1\/me\/friends\/[a-z0-9-]{1,32}$/i.test(url.pathname)))
+  ) {
     req.resume();
     return send(res, 405, { error: 'method not allowed' });
   }
@@ -277,6 +288,34 @@ const server = createServer(async (req, res) => {
       return send(res, 503, { error: 'unavailable' });
     }
     return send(res, 404, { error: 'not found' });
+  }
+
+  if (url.pathname.startsWith(`/${IMAGE_DIR}/`)) {
+    if (!imageLimiter.take(clientIp(req))) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    try {
+      if (comments && (await comments.serveImage(url.pathname, res))) return;
+    } catch (e) {
+      console.error(e);
+      return send(res, 503, { error: 'unavailable' });
+    }
+    return send(res, 404, { error: 'not found' });
+  }
+
+  if (commentRoute) {
+    const me = signedIn(req);
+    if (!me) {
+      req.resume();
+      return send(res, 401, { error: 'login with 42 required' });
+    }
+    if (!limiter.take(me)) {
+      req.resume();
+      return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    }
+    if (!comments) {
+      req.resume();
+      return send(res, 503, { error: 'comments need the database' });
+    }
+    return comments.handle(req, res, url.pathname, me);
   }
 
   const bm = url.pathname.match(/^\/v1\/users\/([a-z0-9-]{1,32})\/banner$/i);
