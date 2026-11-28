@@ -8,6 +8,7 @@
 #                                     deploy: pull and start it, roll back if unhealthy (digi)
 #
 # Secrets: WEB_EXT_API_KEY, WEB_EXT_API_SECRET (AMO API credentials).
+# Forks only run the checks: releasing and deploying are for this repository alone.
 # digi's runner must only ever see master: its jobs are gated on refs/heads/master, and pull requests
 # from forks need approval before any workflow runs (repo Settings → Actions → General).
 # Manual runs (Actions → ci → Run workflow) can force either deploy and pick the version bump.
@@ -113,7 +114,7 @@ jobs:
   release:
     needs: [changes, check]
     if: >-
-      github.ref == 'refs/heads/master' &&
+      github.repository == '0xmthan/intra_reimagined' && github.ref == 'refs/heads/master' &&
       ((github.event_name == 'push' && needs.changes.outputs.extension == 'true' &&
         !startsWith(github.event.head_commit.message, 'release ')) ||
        (github.event_name == 'workflow_dispatch' && inputs.release_extension))
@@ -198,7 +199,7 @@ jobs:
   image:
     needs: [changes, check]
     if: >-
-      github.ref == 'refs/heads/master' &&
+      github.repository == '0xmthan/intra_reimagined' && github.ref == 'refs/heads/master' &&
       ((github.event_name == 'push' && needs.changes.outputs.server == 'true') ||
        (github.event_name == 'workflow_dispatch' && inputs.deploy_server))
     runs-on: ubuntu-latest
