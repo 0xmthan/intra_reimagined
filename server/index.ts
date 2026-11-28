@@ -9,7 +9,8 @@
 //   GET /v1/users/:login/events       →  { campusId, events: [{ id, name, kind, location, begin, end, subscribers, max }] }: every event at their campus (events.ts)
 //   GET /v1/events/:id/users          →  { id, users: [{ login, name, image }] }: who's subscribed to an event
 //   GET /v1/events/:id/feedbacks      →  { id, feedbacks: [{ login, rating, comment, at, details: { kind: 0–4 } }] }: its feedback
-//   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
+//   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, givers: { "<slug>": [login…] }, refreshedAt }:
+//                                         outstanding flags they got, and who gave them (newest first)
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
 //   GET /v1/milestones                →  { campusId, refreshedAt, students: [{ login, image, milestone, transcended, level }] }:
