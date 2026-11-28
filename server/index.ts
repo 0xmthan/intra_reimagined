@@ -3,7 +3,8 @@
 //
 //   GET /v1/users/:login/piscine      →  { login, month: "november", year: "2025" }
 //   GET /v1/users/:login/evaluations[?with=<you>]  →  { login, total, failed, outstanding, refreshedAt,
-//                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou, evals: [{ project, at, you }] } }
+//                                                      together?: { with, youEvaluatedThem, theyEvaluatedYou,
+//                                                        evals: [{ project, slug, at, you, team, scaleTeam }] } }
 //   GET /v1/users/:login/logtime      →  { login, sessions: [[startMs, endMs|null], …], syncedAt }: all-time logtime (logtime.ts)
 //   GET /v1/users/:login/events       →  { campusId, events: [{ id, name, kind, location, begin, end, subscribers, max }] }: every event at their campus (events.ts)
 //   GET /v1/events/:id/users          →  { id, users: [{ login, name, image }] }: who's subscribed to an event
@@ -11,6 +12,9 @@
 //   GET /v1/users/:login/outstanding  →  { login, projects: { "<slug>": n }, refreshedAt }: outstanding flags they got
 //   GET /v1/users/:login/family       →  patronage family tree: ancestors and descendants (family.ts)
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
+//   GET /v1/milestones                →  { campusId, refreshedAt, students: [{ login, image, milestone, transcended, level }] }:
+//                                     the viewer's campus's active (not blackholed) students by milestone (milestones.ts);
+//                                     202 { campusId, pending: true } while a campus's first load runs (Retry-After: 30)
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
@@ -45,6 +49,7 @@ import { Auth } from './auth.ts';
 import { FamilyService } from './family.ts';
 import { OutstandingService } from './outstanding.ts';
 import { CampusMembers } from './campus.ts';
+import { CampusMilestones } from './milestones.ts';
 import { CampusEvents } from './events.ts';
 
 // Theme choices the extension offers (src/theme.ts MODES / ACCENTS).
@@ -98,6 +103,7 @@ const outstanding = new OutstandingService(api, db);
 const piscines = new PiscineService(api, db);
 const family = new FamilyService(api, db);
 const campusMembers = new CampusMembers(api, db);
+const campusMilestones = new CampusMilestones(api, db);
 const campusEvents = new CampusEvents(api);
 
 async function getPiscine(login: string): Promise<Piscine | null> {
@@ -495,6 +501,23 @@ const server = createServer(async (req, res) => {
       if (!campusId) return send(res, 404, { error: 'unknown campus' });
       const all = await family.among(await campusMembers.get(campusId));
       return send(res, 200, { campusId, ...all }, { 'Cache-Control': 'private, max-age=600' });
+    } catch (e) {
+      console.error(e);
+      return send(res, 502, { error: '42 API unavailable' });
+    }
+  }
+
+  if (url.pathname === '/v1/milestones') {
+    const me = signedIn(req);
+    if (!me) return send(res, 401, { error: 'login with 42 required' });
+    if (!limiter.take(me)) return send(res, 429, { error: 'too many requests' }, { 'Retry-After': '60' });
+    try {
+      const campusId = (await getPiscine(me))?.campusId;
+      if (!campusId) return send(res, 404, { error: 'unknown campus' });
+      const hit = await campusMilestones.get(campusId);
+      // The first load for a campus runs in the background: ask again shortly.
+      if (!hit) return send(res, 202, { campusId, pending: true }, { 'Retry-After': '30', 'Cache-Control': 'no-store' });
+      return send(res, 200, { campusId, refreshedAt: hit.refreshedAt, students: hit.students }, { 'Cache-Control': 'private, max-age=600' });
     } catch (e) {
       console.error(e);
       return send(res, 502, { error: '42 API unavailable' });

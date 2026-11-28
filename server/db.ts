@@ -33,6 +33,26 @@ export interface PiscineList {
   refreshedAt: Date;
 }
 
+/** One evaluation: [project id (0 = unknown), filled in at (ms), team id, scale team id]; rows saved earlier lack the ids. */
+export type PartnerEval = [project: number, at: number, team?: number, scaleTeam?: number];
+
+/** A 42 project's name and slug (projects.intra.42.fr/<slug>/<login> is a student's page for it). */
+export interface ProjectName {
+  name: string;
+  slug: string;
+}
+
+/** Where a campus's active students are on the Common Core (milestones.ts). */
+export interface MilestoneStudent {
+  login: string;
+  image: string | null;
+  /** 0–6: how many Common Core ranks in a row they validated, from rank 00. */
+  milestone: number;
+  /** Done with the Common Core (rank 06 or the Common Core quest validated, or graded Transcender). */
+  transcended: boolean;
+  level: number;
+}
+
 /** What a student did as an evaluator (counts over their filled-in evaluations). */
 export interface EvalStats {
   login: string;
@@ -41,8 +61,8 @@ export interface EvalStats {
   outstanding: number;
   /** login → how many (filled-in) evaluations this student did of them. */
   partners: Record<string, number>;
-  /** login → those evaluations: [project id, filled in at (ms)]. Absent on rows saved before it was kept. */
-  partnerEvals?: Record<string, [number, number][]> | null;
+  /** login → those evaluations (see PartnerEval). Absent on rows saved before it was kept. */
+  partnerEvals?: Record<string, PartnerEval[]> | null;
   /** The newest filled-in evaluation counted (ms): hourly refreshes only ask 42 for later ones. */
   lastFilledAt?: number | null;
   /** When the whole history was last read from 42 (daily, to catch anything changed after the fact). */
@@ -115,6 +135,14 @@ export class Db {
     await this.#sql`alter table eval_stats add column if not exists full_at timestamptz`;
     // 42 project names by id (evals.ts): they never change, so each is asked of 42 once.
     await this.#sql`create table if not exists project_names (id integer primary key, name text not null)`;
+    await this.#sql`alter table project_names add column if not exists slug text`;
+    // Each campus's active students and their milestone (milestones.ts), refreshed every few hours.
+    await this.#sql`
+      create table if not exists campus_milestones (
+        campus_id    integer primary key,
+        students     jsonb not null,
+        refreshed_at timestamptz not null default now()
+      )`;
     // One custom banner per student (banners.ts); served publicly by its content hash.
     await this.#sql`
       create table if not exists banners (
@@ -386,16 +414,32 @@ export class Db {
         last_filled_at = excluded.last_filled_at, full_at = excluded.full_at, refreshed_at = now()`;
   }
 
-  async getProjectNames(ids: number[]): Promise<Map<number, string>> {
+  /** Rows saved before slugs were kept are left out, so they're asked of 42 again. */
+  async getProjectNames(ids: number[]): Promise<Map<number, ProjectName>> {
     if (!ids.length) return new Map();
-    const rows = await this.#sql<{ id: number; name: string }[]>`select id, name from project_names where id = any(${ids})`;
-    return new Map(rows.map((r) => [r.id, r.name]));
+    const rows = await this.#sql<{ id: number; name: string; slug: string }[]>`
+      select id, name, slug from project_names where id = any(${ids}) and slug is not null`;
+    return new Map(rows.map((r) => [r.id, { name: r.name, slug: r.slug }]));
   }
 
-  async saveProjectNames(names: Map<number, string>) {
+  async saveProjectNames(names: Map<number, ProjectName>) {
     if (!names.size) return;
-    const rows = [...names].map(([id, name]) => ({ id, name }));
-    await this.#sql`insert into project_names ${this.#sql(rows, 'id', 'name')} on conflict (id) do update set name = excluded.name`;
+    const rows = [...names].map(([id, p]) => ({ id, name: p.name, slug: p.slug }));
+    await this.#sql`
+      insert into project_names ${this.#sql(rows, 'id', 'name', 'slug')}
+      on conflict (id) do update set name = excluded.name, slug = excluded.slug`;
+  }
+
+  async getCampusMilestones(campusId: number): Promise<{ students: MilestoneStudent[]; refreshedAt: Date } | undefined> {
+    const [row] = await this.#sql<{ students: MilestoneStudent[]; refreshedAt: Date }[]>`
+      select students, refreshed_at as "refreshedAt" from campus_milestones where campus_id = ${campusId}`;
+    return row;
+  }
+
+  async saveCampusMilestones(campusId: number, students: MilestoneStudent[]) {
+    await this.#sql`
+      insert into campus_milestones (campus_id, students) values (${campusId}, ${this.#sql.json(students)})
+      on conflict (campus_id) do update set students = excluded.students, refreshed_at = now()`;
   }
 
   async getPiscine(login: string): Promise<Piscine | undefined> {
