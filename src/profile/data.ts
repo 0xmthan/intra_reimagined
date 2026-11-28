@@ -343,13 +343,22 @@ export async function saveBanner(file: File | null): Promise<{ url: string | nul
 
 // ---------- outstanding flags per project (server: /v1/users/:login/outstanding) ----------
 
-/** Outstanding flags `login` got, by project slug; undefined = unknown (no server, signed out). */
-export async function fetchOutstanding(login: string): Promise<Record<string, number> | undefined> {
+/**
+ * Outstanding flags `login` got, by project slug: how many, and who gave them (newest first; empty
+ * when the server doesn't say). Undefined = unknown (no server, signed out).
+ */
+export async function fetchOutstanding(login: string): Promise<Record<string, { n: number; by: string[] }> | undefined> {
   if (!IR_API) return undefined;
-  const j = await irGet<{ projects: unknown }>(`/v1/users/${encodeURIComponent(login)}/outstanding`);
+  const j = await irGet<{ projects: unknown; givers?: unknown }>(`/v1/users/${encodeURIComponent(login)}/outstanding`);
   if (!j || j === 'auth' || typeof j.projects !== 'object' || !j.projects) return undefined;
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(j.projects)) if (typeof v === 'number' && v > 0 && /^[\w.-]{1,80}$/.test(k)) out[k] = v;
+  const givers = (typeof j.givers === 'object' && j.givers ? j.givers : {}) as Record<string, unknown>;
+  const out: Record<string, { n: number; by: string[] }> = {};
+  for (const [k, v] of Object.entries(j.projects)) {
+    if (typeof v !== 'number' || v <= 0 || !/^[\w.-]{1,80}$/.test(k)) continue;
+    const g = givers[k];
+    const by = Array.isArray(g) ? g.filter((l): l is string => typeof l === 'string' && /^[a-z0-9-]{1,32}$/i.test(l)) : [];
+    out[k] = { n: v, by };
+  }
   return out;
 }
 
