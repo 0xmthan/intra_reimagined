@@ -14,7 +14,8 @@
 //   GET /v1/patronages                →  every patronage family at the viewer's campus (family.ts)
 //   GET /v1/milestones                →  { campusId, refreshedAt, students: [{ login, image, milestone, transcended, level }] }:
 //                                     the viewer's campus's active (not blackholed) students by milestone (milestones.ts);
-//                                     202 { campusId, pending: true } while a campus's first load runs (Retry-After: 30)
+//                                     202 { campusId, pending: true } while a campus's first load runs (Retry-After: 30);
+//                                     502 with Retry-After if it failed (tried again after 5 minutes)
 //   GET /v1/piscines/:campusId/:year/:month  →  { campusId, year, month, students: [{ login, name, image, active }] }
 //   GET /health                       →  { ok: true }
 //   GET /auth/start, /auth/callback   →  login with 42 (auth.ts); every /v1 route needs its Bearer token
@@ -516,8 +517,13 @@ const server = createServer(async (req, res) => {
       if (!campusId) return send(res, 404, { error: 'unknown campus' });
       const hit = await campusMilestones.get(campusId);
       // The first load for a campus runs in the background: ask again shortly.
-      if (!hit) return send(res, 202, { campusId, pending: true }, { 'Retry-After': '30', 'Cache-Control': 'no-store' });
-      return send(res, 200, { campusId, refreshedAt: hit.refreshedAt, students: hit.students }, { 'Cache-Control': 'private, max-age=600' });
+      if (hit.status === 'pending') return send(res, 202, { campusId, pending: true }, { 'Retry-After': '30', 'Cache-Control': 'no-store' });
+      // It failed, and won't be tried again before retryAt.
+      if (hit.status === 'failed') {
+        const wait = Math.max(1, Math.ceil((hit.retryAt - Date.now()) / 1000));
+        return send(res, 502, { error: '42 API unavailable' }, { 'Retry-After': String(wait), 'Cache-Control': 'no-store' });
+      }
+      return send(res, 200, { campusId, refreshedAt: new Date(hit.refreshedAt).toISOString(), students: hit.students }, { 'Cache-Control': 'private, max-age=600' });
     } catch (e) {
       console.error(e);
       return send(res, 502, { error: '42 API unavailable' });

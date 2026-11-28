@@ -4,13 +4,16 @@
 // Rank 06 or the "common-core" quest validated (or the Transcender grade) means transcended.
 // Blackholed students are left out. A few pages of cursus_users plus a few per rank quest: kept in
 // Postgres and refreshed every 6 hours in the background. The first load takes a minute or two, so
-// nobody waits on it: get() starts it and says there's nothing yet (the route answers 202).
+// nobody waits on it: get() starts it and says it's pending (the route answers 202). A refresh that
+// fails isn't tried again for RETRY_MS: a stale list is served meanwhile, and with none at all get()
+// says it failed (the route answers 502) instead of pending forever.
 import type { FtApi } from './ft-api.ts';
 import type { Db, MilestoneStudent } from './db.ts';
 
 const PER_PAGE = 100;
 const MAX_PAGES = 50;
 const STALE_MS = 6 * 3_600_000;
+export const MILESTONES_RETRY_MS = 5 * 60_000; // after a failed refresh, before the next try
 const CURSUS = 21; // 42cursus
 /** Quest ids of Common Core ranks 00–05 (cursus 21). */
 const RANKS = [44, 45, 46, 47, 48, 49];
@@ -29,6 +32,11 @@ interface CursusUser {
   };
 }
 
+type Hit = { students: MilestoneStudent[]; refreshedAt: number };
+
+/** What get() has for a campus: the list, the first load still running, or it failed (until `retryAt`, ms). */
+export type MilestonesResult = ({ status: 'ready' } & Hit) | { status: 'pending' } | { status: 'failed'; retryAt: number };
+
 interface QuestUser {
   validated_at: string | null;
   user: { login: string };
@@ -37,8 +45,9 @@ interface QuestUser {
 export class CampusMilestones {
   readonly #api: FtApi;
   readonly #db: Db | undefined;
-  #memory = new Map<number, { students: MilestoneStudent[]; refreshedAt: number }>();
-  #inflight = new Map<number, Promise<{ students: MilestoneStudent[]; refreshedAt: number }>>();
+  #memory = new Map<number, Hit>();
+  #inflight = new Map<number, Promise<Hit>>();
+  #failedAt = new Map<number, number>(); // campus → when its last refresh failed (ms)
 
   constructor(api: FtApi, db: Db | undefined) {
     this.#api = api;
@@ -96,15 +105,21 @@ export class CampusMilestones {
         await this.#db?.saveCampusMilestones(campusId, students);
         const hit = { students, refreshedAt: Date.now() };
         this.#memory.set(campusId, hit);
+        this.#failedAt.delete(campusId);
         return hit;
-      })().finally(() => this.#inflight.delete(campusId));
+      })()
+        .catch((e) => {
+          this.#failedAt.set(campusId, Date.now());
+          throw e;
+        })
+        .finally(() => this.#inflight.delete(campusId));
       this.#inflight.set(campusId, p);
     }
     return p;
   }
 
-  /** The stored list (refreshed behind when stale), or undefined while the first load runs. */
-  async get(campusId: number): Promise<{ students: MilestoneStudent[]; refreshedAt: number } | undefined> {
+  /** The stored list (refreshed behind when stale), or that the first load is running or failed. */
+  async get(campusId: number): Promise<MilestonesResult> {
     let hit = this.#memory.get(campusId);
     if (!hit) {
       const stored = await this.#db?.getCampusMilestones(campusId);
@@ -113,7 +128,15 @@ export class CampusMilestones {
         this.#memory.set(campusId, hit);
       }
     }
-    if (!hit || Date.now() - hit.refreshedAt > STALE_MS) this.#refresh(campusId).catch((e) => console.error('milestones refresh failed', campusId, e));
-    return hit;
+    const failedAt = this.#failedAt.get(campusId);
+    const retryAt = failedAt === undefined ? 0 : failedAt + MILESTONES_RETRY_MS;
+    const due = !hit || Date.now() - hit.refreshedAt > STALE_MS;
+    if (due && !this.#inflight.has(campusId) && Date.now() >= retryAt) {
+      this.#refresh(campusId).catch((e) => console.error('milestones refresh failed', campusId, e));
+    }
+    if (hit) return { status: 'ready', ...hit };
+    // Still within the wait after a failure, and nothing new running: say so rather than "pending".
+    if (Date.now() < retryAt && !this.#inflight.has(campusId)) return { status: 'failed', retryAt };
+    return { status: 'pending' };
   }
 }

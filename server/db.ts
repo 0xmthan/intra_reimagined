@@ -46,7 +46,10 @@ export interface ProjectName {
 export interface MilestoneStudent {
   login: string;
   image: string | null;
-  /** 0–6: how many Common Core ranks in a row they validated, from rank 00. */
+  /**
+   * 0–6: one past the highest Common Core rank they validated (rank 00 is optional, so a skipped
+   * rank below it doesn't hold them back); 6 when transcended.
+   */
   milestone: number;
   /** Done with the Common Core (rank 06 or the Common Core quest validated, or graded Transcender). */
   transcended: boolean;
