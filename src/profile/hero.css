@@ -631,6 +631,48 @@ button.icon-btn {
 .together.muted {
   opacity: 0.8;
 }
+button.together {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+button.together:hover {
+  color: var(--text);
+}
+.tg-caret {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.tg-list {
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+.tg-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  padding: 5px 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+a.tg-row:hover {
+  color: var(--text);
+}
+.tg-proj {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .evlegend {
   display: flex;

@@ -770,7 +770,7 @@ export interface EvalStats {
     youEvaluatedThem: number;
     theyEvaluatedYou: number;
     /** Each one, newest first: the project, when (ms), and whether you were the evaluator. */
-    evals: { project: string; at: number; you: boolean }[];
+    evals: { project: string; slug: string; at: number; you: boolean; team: number; scaleTeam: number }[];
   };
 }
 
@@ -786,7 +786,7 @@ export async function fetchEvalStats(login: string, viewer?: string): Promise<Ev
     youEvaluatedThem: t.youEvaluatedThem,
     theyEvaluatedYou: t.theyEvaluatedYou,
     evals: (Array.isArray(t.evals) ? t.evals : []).filter(
-      (e) => !!e && typeof e.project === 'string' && Number.isFinite(e.at) && typeof e.you === 'boolean',
+      (e) => !!e && typeof e.project === 'string' && typeof e.slug === 'string' && Number.isFinite(e.at) && typeof e.you === 'boolean',
     ),
   };
   return { total: j.total, failed: j.failed, outstanding: j.outstanding, together };
